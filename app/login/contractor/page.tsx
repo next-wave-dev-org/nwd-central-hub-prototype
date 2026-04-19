@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../../../lib/supabaseClient'
+import { supabase } from '@/lib/supabase'
 import Navbar from '../../components/Navbar'
 
 type Project = {
