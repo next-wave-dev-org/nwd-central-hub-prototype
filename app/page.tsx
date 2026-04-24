@@ -81,8 +81,8 @@ export default function Home() {
                 href={item.href}
                 className="group flex items-center gap-5 rounded-lg px-5 py-4 border transition-colors hover:brightness-95"
                 style={{
-                  borderColor: 'var(--nwd-border)',
-                  background: `color-mix(in srgb, ${item.accent} 16%, white)`,
+                  borderColor: item.accent,
+                  background: 'white',
                 }}
               >
                 {/* Color accent bar */}
