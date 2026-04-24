@@ -1,65 +1,136 @@
-import Image from "next/image";
+import Link from 'next/link'
+import Image from 'next/image'
+
+const navItems = [
+  {
+    href: '/proposals/new',
+    label: 'Create Proposal',
+    description: 'Submit a new client proposal',
+    accent: 'var(--nwd-purple)',
+    tag: 'PROPOSALS',
+  },
+  {
+    href: '/proposals',
+    label: 'Contractor View',
+    description: 'Browse submitted proposals',
+    accent: 'var(--nwd-purple)',
+    tag: 'PROPOSALS',
+  },
+  {
+    href: '/admin',
+    label: 'Admin Dashboard',
+    description: 'Review and approve proposals',
+    accent: 'var(--nwd-teal)',
+    tag: 'ADMIN',
+  },
+  {
+    href: '/login',
+    label: 'Sign In',
+    description: 'Log in to your account',
+    accent: 'var(--nwd-sky)',
+    tag: 'AUTH',
+  },
+]
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
+
+      {/* Header */}
+      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Image
+            src="/NextWaveDev_FINAL_small.png"
+            alt="NextWaveDev logo"
+            width={36}
+            height={36}
+            className="object-contain"
+          />
+          <div>
+            <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
+              NextWaveDev
+            </span>
+            <span className="text-gray-400 mx-2 select-none">/</span>
+            <span className="text-sm text-gray-500 font-medium">Central Hub</span>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      {/* Main */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-14">
+        <div className="w-full max-w-md">
+
+          {/* Page heading */}
+          <div className="mb-10">
+            <p
+              className="text-xs font-semibold tracking-widest mb-2"
+              style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}
+            >
+              PORTAL
+            </p>
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+              Let's build something great
+            </h1>
+          </div>
+
+          {/* Nav cards */}
+          <nav className="flex flex-col gap-3">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="group flex items-center gap-5 rounded-lg px-5 py-4 border transition-colors hover:brightness-95"
+                style={{
+                  borderColor: item.accent,
+                  background: 'white',
+                }}
+              >
+                {/* Color accent bar */}
+                <div
+                  className="w-1 self-stretch rounded-full flex-shrink-0"
+                  style={{ background: item.accent }}
+                />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-semibold text-gray-900">{item.label}</span>
+                    <span
+                      className="text-xs font-semibold tracking-wider px-1.5 py-0.5 rounded"
+                      style={{
+                        color: item.accent,
+                        background: `color-mix(in srgb, ${item.accent} 10%, transparent)`,
+                        fontFamily: 'var(--font-geist-mono)',
+                      }}
+                    >
+                      {item.tag}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400">{item.description}</p>
+                </div>
+
+                {/* Arrow */}
+                <svg
+                  className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors flex-shrink-0"
+                  fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8h10M9 4l4 4-4 4" />
+                </svg>
+              </Link>
+            ))}
+          </nav>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="text-center py-6 px-4">
+        <p
+          className="text-xs tracking-wide"
+          style={{ color: 'var(--nwd-purple)', opacity: 0.4, fontFamily: 'var(--font-geist-mono)' }}
+        >
+          NWD CENTRAL HUB
+        </p>
+      </footer>
+
     </div>
-  );
+  )
 }
