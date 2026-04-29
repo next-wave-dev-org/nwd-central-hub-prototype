@@ -3,36 +3,46 @@
 import { supabase } from "@/lib/supabase";
 
 export default function TestPage() {
-  //  Test connection
+  // Test connection
   async function testConnection() {
     const { data, error } = await supabase.auth.getSession();
 
     console.log(data, error);
 
     if (error) {
-      alert("Error: " + error.message);
+      alert("Error connecting to Supabase: " + error.message);
     } else {
       alert("Connected to Supabase ");
     }
   }
 
-  //  Create test user (THIS is what you're missing)
+  // Create test user
   async function signUp() {
+    const email = `test${Date.now()}@example.com`; //  dynamic email
+    const password = "password123";
+
     const { error } = await supabase.auth.signUp({
-      email: "test2@example.com",
-      password: "password123",
+      email,
+      password,
     });
 
     if (error) {
-      alert(error.message);
+      if (error.message.includes("already registered")) {
+        alert("User already exists (this is expected if reused)");
+      } else {
+        alert("Error creating user: " + error.message);
+      }
     } else {
-      alert("User created ");
+      alert(`User created successfully \nEmail: ${email}`);
     }
   }
 
   return (
     <div style={{ padding: "2rem" }}>
       <h1>Supabase Test</h1>
+      <p style={{ marginTop: "10px", color: "#666" }}>
+        Use these buttons to verify connection and authentication.
+      </p>
 
       {/* Connection button */}
       <button
@@ -45,7 +55,7 @@ export default function TestPage() {
           borderRadius: "6px",
           cursor: "pointer",
           fontSize: "16px",
-          marginTop: "10px",
+          marginTop: "20px",
         }}
       >
         Test Connection
@@ -62,7 +72,7 @@ export default function TestPage() {
           borderRadius: "6px",
           cursor: "pointer",
           fontSize: "16px",
-          marginTop: "10px",
+          marginTop: "20px",
           marginLeft: "10px",
         }}
       >
