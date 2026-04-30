@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import Navbar from '../../components/Navbar'
+import Navbar from '@/components/Navbar'
 
 type Project = {
   id: string

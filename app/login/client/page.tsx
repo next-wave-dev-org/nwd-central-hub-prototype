@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import Navbar from '../../components/Navbar'
+import Navbar from '@/components/Navbar'
 
 export default function ClientPage() {
   const router = useRouter()
