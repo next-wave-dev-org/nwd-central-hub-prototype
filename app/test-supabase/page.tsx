@@ -1,9 +1,13 @@
 "use client";
 
+import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function TestPage() {
-  //  Test connection
+  if (process.env.NODE_ENV !== "development") {
+    notFound();
+  }
+
   async function testConnection() {
     const { data, error } = await supabase.auth.getSession();
 
@@ -16,7 +20,6 @@ export default function TestPage() {
     }
   }
 
-  //  Create test user (THIS is what you're missing)
   async function signUp() {
     const { error } = await supabase.auth.signUp({
       email: "test2@example.com",
@@ -34,7 +37,6 @@ export default function TestPage() {
     <div style={{ padding: "2rem" }}>
       <h1>Supabase Test</h1>
 
-      {/* Connection button */}
       <button
         onClick={testConnection}
         style={{
@@ -51,7 +53,6 @@ export default function TestPage() {
         Test Connection
       </button>
 
-      {/* Signup button */}
       <button
         onClick={signUp}
         style={{
