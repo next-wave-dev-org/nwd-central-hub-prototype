@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RouteGuard from '../components/RouteGuard'
 
-export default function AdminPage() {
+function AdminContent() {
   const [proposals, setProposals] = useState<any[]>([])
 
   useEffect(() => {
@@ -20,20 +21,15 @@ export default function AdminPage() {
   }
 
   async function approveProposal(proposalId: string) {
-    // 1️⃣ Update proposal status
     await supabase
       .from('proposals')
       .update({ status: 'approved' })
       .eq('id', proposalId)
 
-    // 2️⃣ Insert into projects
     await supabase
       .from('projects')
-      .insert({
-        proposal_id: proposalId,
-      })
+      .insert({ proposal_id: proposalId })
 
-    // 3️⃣ Refresh list
     fetchProposals()
   }
 
@@ -55,5 +51,13 @@ export default function AdminPage() {
         </div>
       ))}
     </div>
+  )
+}
+
+export default function AdminPage() {
+  return (
+    <RouteGuard allowedRoles={['Admin']}>
+      <AdminContent />
+    </RouteGuard>
   )
 }
