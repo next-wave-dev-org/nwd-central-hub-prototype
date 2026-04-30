@@ -18,7 +18,7 @@ const AUTHENTICATED_PREFIXES = ['/proposals']
 // Routes that anyone (including unauthenticated users) can access
 const PUBLIC_ROUTES = new Set(['/', '/login', '/unauthorized', '/test-supabase'])
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Pass through public routes immediately
