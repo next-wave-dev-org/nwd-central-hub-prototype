@@ -111,19 +111,27 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 
 ---
 
+## Documentation
+
+- Developer Guide → see `DEVELOPER.md`
+- Database Setup → see `/docs/database-setup.md`
+
+---
+
 ## Project Structure
 
 ```
 nwd-central-hub-prototype/
 ├── app/                  # Next.js App Router pages and layouts
 │   ├── admin/            # Admin dashboard page
-│   ├── components/       # Shared UI components (Navbar, etc.)
 │   ├── login/            # Login pages per role (admin, client, contractor)
 │   ├── proposals/        # Proposals listing and creation
 │   ├── globals.css       # Global styles
 │   ├── layout.tsx        # Root layout
 │   └── page.tsx          # Landing page
-├── lib/                  # Supabase client setup
+├── components/           # Reusable UI components (Navbar, etc.)
+├── lib/                  # Supabase client and helper logic
+├── docs/                 # Additional documentation (database setup, etc.)
 ├── public/               # Static assets
 ├── .env.example          # Environment variable template
 └── package.json
