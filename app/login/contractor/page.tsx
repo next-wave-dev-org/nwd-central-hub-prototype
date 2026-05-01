@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import Navbar from '../../components/Navbar'
+import RouteGuard from '../../components/RouteGuard'
+import { useAuth } from '../../components/AuthProvider'
+import { supabase } from '@/lib/supabase'
 
 type Project = {
   id: string
@@ -11,56 +12,33 @@ type Project = {
   description: string
 }
 
-export default function ContractorPage() {
-  const router = useRouter()
+function ContractorContent() {
+  const { profile } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+    if (!profile) return
 
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (profile?.role !== 'Contractor') {
-        router.push('/login')
-        return
-      }
-
+    const fetchProjects = async () => {
       const { data, error } = await supabase
-      .from('projects_table')
-      .select('id, title, description')
-      .eq('status', 'Active')
-      .eq('contractor_id', user.id)
+        .from('projects_table')
+        .select('id, title, description')
+        .eq('status', 'Active')
+        .eq('contractor_id', profile.id)
 
-      if (error) {
-        console.error(error)
-      } else {
-        setProjects(data || [])
-      }
-
+      if (!error) setProjects(data || [])
       setLoading(false)
     }
 
-    checkUser()
-  }, [router])
+    fetchProjects()
+  }, [profile])
 
   return (
     <div className="min-h-screen bg-stone-800">
       <Navbar />
 
       <main className="max-w-5xl mx-auto px-6 py-14">
-
-        {/* Header */}
         <div className="flex items-end justify-between mb-2">
           <h1 className="text-4xl font-black text-stone-50 tracking-tight leading-none">
             Active Projects
@@ -73,10 +51,8 @@ export default function ContractorPage() {
           )}
         </div>
 
-        {/* Divider */}
         <div className="h-0.5 bg-gradient-to-r from-stone-50 to-transparent rounded-full mt-4 mb-10" />
 
-        {/* Loading */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-9 h-9 rounded-full border-[3px] border-stone-200 border-t-stone-900 animate-spin" />
@@ -84,7 +60,6 @@ export default function ContractorPage() {
           </div>
         )}
 
-        {/* Empty state */}
         {!loading && projects.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
             <span className="text-5xl">📋</span>
@@ -95,7 +70,6 @@ export default function ContractorPage() {
           </div>
         )}
 
-        {/* Project cards */}
         {!loading && projects.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map((project) => (
@@ -103,19 +77,14 @@ export default function ContractorPage() {
                 key={project.id}
                 className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-200 hover:-translate-y-1 flex flex-col"
               >
-                {/* Top accent bar */}
                 <div className="h-1.5 bg-gradient-to-r from-stone-800 to-stone-500" />
-
                 <div className="p-6 flex flex-col gap-3 flex-1">
-                  {/* Status pill */}
                   <span className="self-start text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-0.5">
                     ● Active
                   </span>
-
                   <h2 className="text-lg font-bold text-stone-900 leading-snug tracking-tight">
                     {project.title}
                   </h2>
-
                   <p className="text-sm text-stone-500 leading-relaxed flex-1">
                     {project.description}
                   </p>
@@ -126,5 +95,13 @@ export default function ContractorPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function ContractorDashboardPage() {
+  return (
+    <RouteGuard allowedRoles={['Contractor']}>
+      <ContractorContent />
+    </RouteGuard>
   )
 }

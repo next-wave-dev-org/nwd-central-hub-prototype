@@ -1,39 +1,12 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import Navbar from '../../components/Navbar'
+import RouteGuard from '../../components/RouteGuard'
 
-export default function ClientPage() {
-  const router = useRouter()
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (profile?.role !== 'Client') {
-        router.push('/login')
-      }
-    }
-
-    checkUser()
-  }, [])
-
+export default function ClientDashboardPage() {
   return (
-    <>
+    <RouteGuard allowedRoles={['Client']}>
       <Navbar />
-    </>
+    </RouteGuard>
   )
 }
