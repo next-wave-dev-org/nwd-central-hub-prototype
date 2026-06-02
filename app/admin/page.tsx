@@ -21,15 +21,20 @@ function AdminContent() {
     if (!error) setProposals(data || [])
   }
 
-  async function approveProposal(proposalId: string) {
+  async function approveProposal(proposal: any) {
     await supabase
       .from('proposals')
       .update({ status: 'approved' })
-      .eq('id', proposalId)
+      .eq('id', proposal.id)
 
     await supabase
       .from('projects')
-      .insert({ proposal_id: proposalId })
+      .insert({
+        proposal_id: proposal.id,
+        title: proposal.title,
+        description: proposal.description,
+        client_id: proposal.client_id,
+      })
 
     fetchProposals()
   }
@@ -49,7 +54,7 @@ function AdminContent() {
 
           <p>{proposal.description}</p>
 
-          <button onClick={() => approveProposal(proposal.id)}>
+          <button onClick={() => approveProposal(proposal)}>
             Approve
           </button>
         </div>

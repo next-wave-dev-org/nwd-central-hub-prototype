@@ -98,6 +98,81 @@ create table if not exists public.proposals (
 
 ---
 
+### 3. projects
+
+Created when an admin approves a proposal. Linked to the originating proposal and the client who submitted it.
+
+| Column      | Type        | Description                    |
+| ----------- | ----------- | ------------------------------ |
+| id          | uuid        | Primary key                    |
+| proposal_id | uuid        | References proposals.id        |
+| client_id   | uuid        | References profiles.id         |
+| title       | text        | Project title (from proposal)  |
+| description | text        | Project description            |
+| created_at  | timestamptz | Timestamp of creation          |
+
+```sql
+create table if not exists public.projects (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid references public.proposals(id) on delete set null,
+  client_id uuid references public.profiles(id) on delete set null,
+  title text not null,
+  description text,
+  created_at timestamptz default now()
+);
+```
+
+---
+
+### 4. contractor_projects
+
+Junction table linking contractors to the projects they are assigned to.
+
+| Column       | Type        | Description              |
+| ------------ | ----------- | ------------------------ |
+| id           | uuid        | Primary key              |
+| contractor_id | uuid       | References profiles.id   |
+| project_id   | uuid        | References projects.id   |
+| assigned_at  | timestamptz | Timestamp of assignment  |
+
+```sql
+create table if not exists public.contractor_projects (
+  id uuid primary key default gen_random_uuid(),
+  contractor_id uuid not null references public.profiles(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  assigned_at timestamptz default now(),
+  unique (contractor_id, project_id)
+);
+```
+
+---
+
+### 5. proposal_requests
+
+Tracks a contractor's request to join a project. An admin reviews the request and approves or rejects it. Approval inserts a row into `contractor_projects`.
+
+| Column        | Type        | Description                                  |
+| ------------- | ----------- | -------------------------------------------- |
+| id            | uuid        | Primary key                                  |
+| contractor_id | uuid        | References profiles.id                       |
+| project_id    | uuid        | References projects.id                       |
+| status        | text        | `pending` \| `approved` \| `rejected`        |
+| created_at    | timestamptz | Timestamp of creation                        |
+
+```sql
+create table if not exists public.proposal_requests (
+  id uuid primary key default gen_random_uuid(),
+  contractor_id uuid not null references public.profiles(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz default now(),
+  unique (contractor_id, project_id)
+);
+```
+
+---
+
 ## Seed Data (Optional for Testing)
 
 Run this after creating tables:

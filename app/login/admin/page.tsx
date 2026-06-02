@@ -12,6 +12,13 @@ const adminItems = [
     accent: 'var(--nwd-teal)',
     tag: 'USERS',
   },
+  {
+    href: '/login/admin/requests',
+    label: 'Pending Requests',
+    description: 'Review contractor requests to join projects',
+    accent: 'var(--nwd-purple)',
+    tag: 'REQUESTS',
+  },
 ]
 
 function AdminDashboardContent() {
