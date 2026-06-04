@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Navbar from '@/components/Navbar'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
@@ -17,6 +18,7 @@ type RequestMap = Record<string, RequestStatus>
 
 function ContractorContent() {
   const { profile } = useAuth()
+  const router = useRouter()
   const [activeProjects, setActiveProjects] = useState<Project[]>([])
   const [availableProjects, setAvailableProjects] = useState<Project[]>([])
   const [requestMap, setRequestMap] = useState<RequestMap>({})
@@ -71,37 +73,74 @@ function ContractorContent() {
     setRequesting(null)
   }
 
-  return (
-    <div className="min-h-screen bg-stone-800">
-      <Navbar />
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
-      <main className="max-w-5xl mx-auto px-6 py-14 flex flex-col gap-16">
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
+
+      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/NextWaveDev_FINAL_small.png"
+              alt="NextWaveDev logo"
+              width={36}
+              height={36}
+              className="object-contain"
+            />
+            <div>
+              <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
+                NextWaveDev
+              </span>
+              <span className="text-gray-400 mx-2 select-none">/</span>
+              <span className="text-sm text-gray-500 font-medium">Contractor Dashboard</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <a
+              href="https://clockify.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+            >
+              Log Hours
+            </a>
+            <button
+              onClick={handleLogout}
+              className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-6 py-14 w-full flex flex-col gap-16">
 
         {/* ── Active Projects ── */}
         <section>
           <div className="flex items-end justify-between mb-2">
-            <h1 className="text-4xl font-black text-stone-50 tracking-tight leading-none">
-              Active Projects
-            </h1>
+            <div>
+              <p
+                className="text-xs font-semibold tracking-widest mb-2"
+                style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}
+              >
+                CONTRACTOR
+              </p>
+              <h1 className="text-3xl font-bold text-gray-900 leading-tight">Active Projects</h1>
+            </div>
             {!loading && (
-              <span className="mb-1 bg-stone-900 text-white text-xs font-semibold px-4 py-1.5 rounded-full">
+              <span className="mb-1 text-xs font-semibold px-4 py-1.5 rounded-full bg-gray-100 text-gray-600">
                 {activeProjects.length} project{activeProjects.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
 
-        <div className="flex items-center gap-4 mt-4 mb-6">
-          <a
-            href="https://clockify.me"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
-          >
-            Log Hours
-          </a>
-        </div>
-
-        <div className="h-0.5 bg-gradient-to-r from-stone-50 to-transparent rounded-full mb-10" />
+          <div className="h-0.5 bg-gradient-to-r from-gray-200 to-transparent rounded-full mt-4 mb-10" />
 
           {loading ? (
             <LoadingSpinner />
@@ -112,17 +151,18 @@ function ContractorContent() {
               {activeProjects.map((project) => (
                 <div
                   key={project.id}
-                  className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-200 hover:-translate-y-1 flex flex-col"
+                  className="border rounded-2xl overflow-hidden flex flex-col"
+                  style={{ borderColor: 'var(--nwd-border)' }}
                 >
-                  <div className="h-1.5 bg-gradient-to-r from-stone-800 to-stone-500" />
+                  <div className="h-1.5 bg-gradient-to-r from-gray-700 to-gray-400" />
                   <div className="p-6 flex flex-col gap-3 flex-1">
                     <span className="self-start text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-0.5">
                       ● Active
                     </span>
-                    <h2 className="text-lg font-bold text-stone-900 leading-snug tracking-tight">
+                    <h2 className="text-lg font-bold text-gray-900 leading-snug tracking-tight">
                       {project.title}
                     </h2>
-                    <p className="text-sm text-stone-500 leading-relaxed flex-1">
+                    <p className="text-sm text-gray-500 leading-relaxed flex-1">
                       {project.description}
                     </p>
                   </div>
@@ -135,17 +175,15 @@ function ContractorContent() {
         {/* ── Available Projects ── */}
         <section>
           <div className="flex items-end justify-between mb-2">
-            <h2 className="text-3xl font-black text-stone-300 tracking-tight leading-none">
-              Available Projects
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-700 leading-tight">Available Projects</h2>
             {!loading && (
-              <span className="mb-1 bg-stone-700 text-stone-300 text-xs font-semibold px-4 py-1.5 rounded-full">
+              <span className="mb-1 text-xs font-semibold px-4 py-1.5 rounded-full bg-gray-100 text-gray-400">
                 {availableProjects.length} available
               </span>
             )}
           </div>
 
-          <div className="h-0.5 bg-gradient-to-r from-stone-500 to-transparent rounded-full mt-4 mb-10" />
+          <div className="h-0.5 bg-gradient-to-r from-gray-200 to-transparent rounded-full mt-4 mb-10" />
 
           {loading ? (
             <LoadingSpinner />
@@ -158,14 +196,15 @@ function ContractorContent() {
                 return (
                   <div
                     key={project.id}
-                    className="bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col"
+                    className="border rounded-2xl overflow-hidden flex flex-col"
+                    style={{ borderColor: 'var(--nwd-border)' }}
                   >
-                    <div className="h-1.5 bg-gradient-to-r from-stone-400 to-stone-200" />
+                    <div className="h-1.5 bg-gradient-to-r from-gray-300 to-gray-100" />
                     <div className="p-6 flex flex-col gap-3 flex-1">
-                      <h3 className="text-lg font-bold text-stone-900 leading-snug tracking-tight">
+                      <h3 className="text-lg font-bold text-gray-900 leading-snug tracking-tight">
                         {project.title}
                       </h3>
-                      <p className="text-sm text-stone-500 leading-relaxed flex-1">
+                      <p className="text-sm text-gray-500 leading-relaxed flex-1">
                         {project.description}
                       </p>
 
@@ -185,7 +224,11 @@ function ContractorContent() {
                         <button
                           onClick={() => requestAccess(project.id)}
                           disabled={requesting === project.id}
-                          className="self-start text-xs font-semibold bg-stone-900 text-white px-4 py-1.5 rounded-full hover:bg-stone-700 transition-colors disabled:opacity-50"
+                          className="self-start text-xs font-semibold px-4 py-1.5 rounded-full border transition-colors disabled:opacity-50"
+                          style={{
+                            borderColor: 'var(--nwd-purple)',
+                            color: 'var(--nwd-purple)',
+                          }}
                         >
                           {requesting === project.id ? 'Requesting…' : 'Request Access'}
                         </button>
@@ -199,6 +242,16 @@ function ContractorContent() {
         </section>
 
       </main>
+
+      <footer className="text-center py-6 px-4 mt-auto">
+        <p
+          className="text-xs tracking-wide"
+          style={{ color: 'var(--nwd-purple)', opacity: 0.4, fontFamily: 'var(--font-geist-mono)' }}
+        >
+          NWD CENTRAL HUB
+        </p>
+      </footer>
+
     </div>
   )
 }
@@ -206,8 +259,8 @@ function ContractorContent() {
 function LoadingSpinner() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4">
-      <div className="w-9 h-9 rounded-full border-[3px] border-stone-200 border-t-stone-900 animate-spin" />
-      <p className="text-sm text-stone-400">Fetching…</p>
+      <div className="w-8 h-8 rounded-full border-[3px] border-gray-200 border-t-gray-600 animate-spin" />
+      <p className="text-sm text-gray-400">Fetching…</p>
     </div>
   )
 }
@@ -215,7 +268,7 @@ function LoadingSpinner() {
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-      <p className="text-sm text-stone-400 max-w-xs leading-relaxed">{message}</p>
+      <p className="text-sm text-gray-400 max-w-xs leading-relaxed">{message}</p>
     </div>
   )
 }
