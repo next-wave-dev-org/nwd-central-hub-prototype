@@ -90,7 +90,18 @@ function ContractorContent() {
             )}
           </div>
 
-          <div className="h-0.5 bg-gradient-to-r from-stone-50 to-transparent rounded-full mt-4 mb-10" />
+        <div className="flex items-center gap-4 mt-4 mb-6">
+          <a
+            href="https://clockify.me"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+          >
+            Log Hours
+          </a>
+        </div>
+
+        <div className="h-0.5 bg-gradient-to-r from-stone-50 to-transparent rounded-full mb-10" />
 
           {loading ? (
             <LoadingSpinner />
