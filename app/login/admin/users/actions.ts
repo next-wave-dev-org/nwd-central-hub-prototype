@@ -64,20 +64,20 @@ export type DeleteUserResult =
 
 export async function deleteUser(userId: string): Promise<DeleteUserResult> {
   try {
-    // Delete auth user first — Supabase may cascade-delete the profile row
+    // Attempt to delete the auth user — ignore "not found" in case the profile
+    // exists without a corresponding auth record (e.g. created directly in the DB)
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
-    if (authError) {
+    if (authError && !authError.message.toLowerCase().includes('not found')) {
       return { success: false, error: authError.message }
     }
 
-    // Delete profile row in case cascade is not configured
+    // Always delete the profile row directly
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .delete()
       .eq('id', userId)
 
-    // Ignore "not found" — cascade already removed it
-    if (profileError && !profileError.message.includes('0 rows')) {
+    if (profileError) {
       return { success: false, error: profileError.message }
     }
 
