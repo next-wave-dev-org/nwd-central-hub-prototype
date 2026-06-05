@@ -1,15 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
 import { useAuth } from '@/components/AuthProvider'
 import { createUser } from './create/actions'
-import {
-  getUsers, resetUserPassword, deleteUser,
-  updateUser, bulkDeleteUsers, bulkChangeRole, bulkResendInvite,
-} from './actions'
+import { getUsers, resetUserPassword, deleteUser, updateUser } from './actions'
 import type { UserRole, UserProfile } from '@/types/auth'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 0] // 0 = All
@@ -78,7 +75,6 @@ function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol | 
 
 function ManageUsersContent() {
   const { profile: currentUser } = useAuth()
-  const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
   // ── Create form ──
   const [name, setName] = useState('')
@@ -109,13 +105,6 @@ function ManageUsersContent() {
   const [pageSize, setPageSize] = useState(10)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  // ── Bulk selection ──
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkRole, setBulkRole] = useState<UserRole>('client')
-  const [bulkActionLoading, setBulkActionLoading] = useState(false)
-  const [bulkSuccess, setBulkSuccess] = useState<string | null>(null)
-  const [bulkError, setBulkError] = useState<string | null>(null)
-
   // ── Inline editing ──
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -143,14 +132,9 @@ function ManageUsersContent() {
   }, [])
 
   useEffect(() => { loadUsers() }, [loadUsers])
-
-  // Reset page and clear selection on search/sort change
-  useEffect(() => { setPage(0); setSelectedIds(new Set()) }, [search, sortCol, sortDir])
-
-  // Reset page on page size change
+  useEffect(() => { setPage(0) }, [search, sortCol, sortDir])
   useEffect(() => { setPage(0) }, [pageSize])
 
-  // Sync header checkbox indeterminate state
   const filteredSortedUsers = useMemo(() => {
     const q = search.trim().toLowerCase()
     let result = q
@@ -181,17 +165,6 @@ function ManageUsersContent() {
     ? filteredSortedUsers
     : filteredSortedUsers.slice(page * pageSize, (page + 1) * pageSize)
 
-  // Selection helpers
-  const isPageFullySelected = pagedUsers.length > 0 && pagedUsers.every(u => selectedIds.has(u.id))
-  const isPagePartiallySelected = pagedUsers.some(u => selectedIds.has(u.id)) && !isPageFullySelected
-  const isAllFilteredSelected = filteredSortedUsers.length > 0 && filteredSortedUsers.every(u => selectedIds.has(u.id))
-
-  useEffect(() => {
-    if (headerCheckboxRef.current) {
-      headerCheckboxRef.current.indeterminate = isPagePartiallySelected
-    }
-  }, [isPagePartiallySelected])
-
   function toggleSort(col: SortCol) {
     if (sortCol === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -199,39 +172,6 @@ function ManageUsersContent() {
       setSortCol(col)
       setSortDir('asc')
     }
-  }
-
-  function toggleSelectPage() {
-    if (isPageFullySelected) {
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        pagedUsers.forEach(u => next.delete(u.id))
-        return next
-      })
-    } else {
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        pagedUsers.forEach(u => next.add(u.id))
-        return next
-      })
-    }
-  }
-
-  function toggleSelectUser(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function selectAllFiltered() {
-    setSelectedIds(new Set(filteredSortedUsers.map(u => u.id)))
-  }
-
-  function clearSelection() {
-    setSelectedIds(new Set())
   }
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
@@ -272,7 +212,6 @@ function ManageUsersContent() {
       const result = await deleteUser(user.id)
       if (result.success) {
         setExpandedId(null)
-        setDeleteError(null)
         await loadUsers()
       } else {
         setDeleteError({ id: user.id, message: result.error })
@@ -318,88 +257,18 @@ function ManageUsersContent() {
       if (!confirm(`Grant admin access to ${editName || editEmail}?`)) return
     }
     const prev = [...users]
-    // Optimistic update
     setUsers(users.map(u =>
       u.id === user.id ? { ...u, name: editName, email: editEmail, role: editRole } : u
     ))
     setEditingId(null)
     setEditSaving(true)
-
     const result = await updateUser(user.id, { name: editName, email: editEmail, role: editRole })
-
     if (!result.success) {
-      setUsers(prev) // rollback
-      setEditingId(user.id) // re-open
+      setUsers(prev)
+      setEditingId(user.id)
       setEditError(result.error)
     }
     setEditSaving(false)
-  }
-
-  async function handleBulkDelete() {
-    const ids = [...selectedIds].filter(id => id !== currentUser?.id)
-    if (ids.length === 0) { setBulkError('Cannot delete your own account.'); return }
-    if (selectedIds.has(currentUser?.id ?? '')) {
-      if (!confirm(`Your own account was excluded. Delete the remaining ${ids.length} user${ids.length !== 1 ? 's' : ''}?`)) return
-    } else {
-      if (!confirm(`Permanently delete ${ids.length} user${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return
-    }
-
-    const prev = [...users]
-    setUsers(users.filter(u => !ids.includes(u.id)))
-    setSelectedIds(new Set())
-    setBulkActionLoading(true)
-    setBulkError(null)
-    setBulkSuccess(null)
-
-    const result = await bulkDeleteUsers(ids)
-    if (!result.success) {
-      setUsers(prev)
-      setBulkError(result.error)
-    } else {
-      setBulkSuccess(`Deleted ${result.deleted} user${result.deleted !== 1 ? 's' : ''}`)
-    }
-    setBulkActionLoading(false)
-  }
-
-  async function handleBulkChangeRole() {
-    const ids = [...selectedIds]
-    if (bulkRole === 'admin' && !confirm(`Grant admin access to ${ids.length} user${ids.length !== 1 ? 's' : ''}?`)) return
-    else if (bulkRole !== 'admin' && !confirm(`Change role to ${bulkRole} for ${ids.length} user${ids.length !== 1 ? 's' : ''}?`)) return
-
-    const prev = [...users]
-    setUsers(users.map(u => ids.includes(u.id) ? { ...u, role: bulkRole } : u))
-    setBulkActionLoading(true)
-    setBulkError(null)
-    setBulkSuccess(null)
-
-    const result = await bulkChangeRole(ids, bulkRole)
-    if (!result.success) {
-      setUsers(prev)
-      setBulkError(result.error)
-    } else {
-      setSelectedIds(new Set())
-      setBulkSuccess(`Updated role for ${ids.length} user${ids.length !== 1 ? 's' : ''}`)
-    }
-    setBulkActionLoading(false)
-  }
-
-  async function handleBulkResendInvite() {
-    const ids = [...selectedIds]
-    if (!confirm(`Send invite to ${ids.length} user${ids.length !== 1 ? 's' : ''}?`)) return
-
-    setBulkActionLoading(true)
-    setBulkError(null)
-    setBulkSuccess(null)
-
-    const result = await bulkResendInvite(ids)
-    if (!result.success) {
-      setBulkError(result.error)
-    } else {
-      setSelectedIds(new Set())
-      setBulkSuccess(`Sent invite to ${result.sent} user${result.sent !== 1 ? 's' : ''}`)
-      await loadUsers()
-    }
-    setBulkActionLoading(false)
   }
 
   const COLUMNS: { label: string; key: SortCol | null }[] = [
@@ -522,22 +391,6 @@ function ManageUsersContent() {
               </div>
             )}
 
-            {bulkSuccess && (
-              <div className="mb-4 rounded-lg p-3 border text-sm flex items-center justify-between gap-2"
-                style={{ background: 'color-mix(in srgb, #10b981 8%, white)', borderColor: '#6ee7b7', color: '#065f46' }}>
-                <span>{bulkSuccess}</span>
-                <button onClick={() => setBulkSuccess(null)} className="text-emerald-600 hover:text-emerald-800 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
-              </div>
-            )}
-
-            {bulkError && (
-              <div className="mb-4 rounded-lg p-3 border text-sm flex items-center justify-between gap-2"
-                style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
-                <span>{bulkError}</span>
-                <button onClick={() => setBulkError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
-              </div>
-            )}
-
             {/* Search bar */}
             <div className="mb-3 relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
@@ -553,64 +406,6 @@ function ManageUsersContent() {
                 style={{ borderColor: 'var(--nwd-border)' }}
               />
             </div>
-
-            {/* Bulk action toolbar */}
-            {selectedIds.size > 0 && (
-              <div className="mb-3 rounded-lg border p-3 flex items-center gap-3 flex-wrap"
-                style={{ borderColor: 'var(--nwd-border)', background: 'var(--nwd-surface)' }}>
-                <span className="text-xs font-semibold text-gray-700" style={{ fontFamily: 'var(--font-geist-mono)' }}>
-                  {selectedIds.size} selected
-                </span>
-                {!isAllFilteredSelected && (
-                  <button onClick={selectAllFiltered} className="text-xs font-medium underline underline-offset-2"
-                    style={{ color: 'var(--nwd-teal)' }}>
-                    Select all {filteredSortedUsers.length}
-                  </button>
-                )}
-                <button onClick={clearSelection} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-                  Clear
-                </button>
-                <div className="flex-1" />
-                {/* Bulk role change */}
-                <div className="flex items-center gap-2">
-                  <select
-                    value={bulkRole}
-                    onChange={(e) => setBulkRole(e.target.value as UserRole)}
-                    disabled={bulkActionLoading}
-                    className="rounded-lg border px-2 py-1.5 text-xs outline-none focus:ring-2 bg-white disabled:opacity-50"
-                    style={{ borderColor: 'var(--nwd-border)' }}
-                  >
-                    <option value="client">Client</option>
-                    <option value="contractor">Contractor</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <button
-                    onClick={handleBulkChangeRole}
-                    disabled={bulkActionLoading}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
-                    style={{ borderColor: 'var(--nwd-purple)', color: 'var(--nwd-purple)', background: `color-mix(in srgb, var(--nwd-purple) 8%, white)` }}
-                  >
-                    Change Role
-                  </button>
-                </div>
-                <button
-                  onClick={handleBulkResendInvite}
-                  disabled={bulkActionLoading}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
-                  style={{ borderColor: 'var(--nwd-teal)', color: 'var(--nwd-teal)', background: `color-mix(in srgb, var(--nwd-teal) 8%, white)` }}
-                >
-                  {bulkActionLoading ? 'Working…' : 'Send Invite'}
-                </button>
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={bulkActionLoading}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
-                  style={{ borderColor: '#f43f5e', color: '#f43f5e', background: `color-mix(in srgb, #f43f5e 8%, white)` }}
-                >
-                  Delete
-                </button>
-              </div>
-            )}
 
             {/* Pagination controls */}
             {!loadingUsers && !usersError && filteredSortedUsers.length > 0 && (
@@ -670,17 +465,6 @@ function ManageUsersContent() {
                 <table className="min-w-full divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
                   <thead>
                     <tr style={{ background: 'var(--nwd-surface)' }}>
-                      {/* Checkbox column */}
-                      <th className="px-4 py-3 w-10">
-                        <input
-                          ref={headerCheckboxRef}
-                          type="checkbox"
-                          checked={isPageFullySelected}
-                          onChange={toggleSelectPage}
-                          className="rounded cursor-pointer accent-[var(--nwd-teal)]"
-                          aria-label="Select all on page"
-                        />
-                      </th>
                       {COLUMNS.map(({ label, key }) => (
                         <th
                           key={label}
@@ -701,7 +485,6 @@ function ManageUsersContent() {
                     {pagedUsers.map((user) => {
                       const isPending = user.is_temporary_password ?? false
                       const isExpanded = expandedId === user.id
-                      const isSelected = selectedIds.has(user.id)
                       const isResetting = resettingId === user.id
                       const isDeleting = deletingId === user.id
                       const anyBusy = resettingId !== null || deletingId !== null
@@ -717,20 +500,10 @@ function ManageUsersContent() {
                           <tr
                             onClick={() => toggleExpand(user.id)}
                             className="cursor-pointer transition-colors"
-                            style={{ background: isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : isSelected ? 'color-mix(in srgb, var(--nwd-teal) 3%, white)' : undefined }}
+                            style={{ background: isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : undefined }}
                             onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--nwd-surface)' }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : isSelected ? 'color-mix(in srgb, var(--nwd-teal) 3%, white)' : '' }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : '' }}
                           >
-                            {/* Checkbox cell */}
-                            <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleSelectUser(user.id)}
-                                className="rounded cursor-pointer accent-[var(--nwd-teal)]"
-                                aria-label={`Select ${user.name ?? user.email}`}
-                              />
-                            </td>
                             <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 <svg
@@ -754,7 +527,7 @@ function ManageUsersContent() {
                           {/* Expanded action row */}
                           {isExpanded && (
                             <tr style={{ background: 'color-mix(in srgb, var(--nwd-teal) 5%, white)', borderTop: 'none' }}>
-                              <td colSpan={6} className="px-6 py-4" style={{ borderTop: `1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)` }}>
+                              <td colSpan={5} className="px-6 py-4" style={{ borderTop: `1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)` }}>
 
                                 {/* Action buttons */}
                                 <div className="flex items-center gap-3 flex-wrap">
@@ -781,13 +554,12 @@ function ManageUsersContent() {
                                       {isResetting ? 'Sending…' : 'Reset Password'}
                                     </button>
                                   )}
-                                  {/* Edit toggle */}
                                   {!isEditing && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); startEdit(user) }}
                                       disabled={anyBusy || editSaving}
                                       className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
-                                      style={{ borderColor: '#6b7280', color: '#6b7280', background: 'color-mix(in srgb, #6b7280 8%, white)' }}
+                                      style={{ borderColor: 'var(--nwd-sky)', color: 'var(--nwd-sky)', background: 'color-mix(in srgb, var(--nwd-sky) 8%, white)' }}
                                     >
                                       Edit
                                     </button>
@@ -809,37 +581,21 @@ function ManageUsersContent() {
                                     <div className="grid grid-cols-3 gap-3 mb-3">
                                       <div>
                                         <label className="text-xs text-gray-500 mb-1 block">Name</label>
-                                        <input
-                                          type="text"
-                                          value={editName}
-                                          onChange={(e) => setEditName(e.target.value)}
-                                          onClick={(e) => e.stopPropagation()}
-                                          placeholder="Full name"
-                                          className={inputCls}
-                                          style={inputStyle}
-                                        />
+                                        <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                                          onClick={(e) => e.stopPropagation()} placeholder="Full name"
+                                          className={inputCls} style={inputStyle} />
                                       </div>
                                       <div>
                                         <label className="text-xs text-gray-500 mb-1 block">Email</label>
-                                        <input
-                                          type="email"
-                                          value={editEmail}
-                                          onChange={(e) => setEditEmail(e.target.value)}
-                                          onClick={(e) => e.stopPropagation()}
-                                          placeholder="user@example.com"
-                                          className={inputCls}
-                                          style={inputStyle}
-                                        />
+                                        <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)}
+                                          onClick={(e) => e.stopPropagation()} placeholder="user@example.com"
+                                          className={inputCls} style={inputStyle} />
                                       </div>
                                       <div>
                                         <label className="text-xs text-gray-500 mb-1 block">Role</label>
-                                        <select
-                                          value={editRole}
-                                          onChange={(e) => setEditRole(e.target.value as UserRole)}
+                                        <select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)}
                                           onClick={(e) => e.stopPropagation()}
-                                          className={inputCls}
-                                          style={inputStyle}
-                                        >
+                                          className={inputCls} style={inputStyle}>
                                           <option value="client">Client</option>
                                           <option value="contractor">Contractor</option>
                                           <option value="admin">Admin</option>
