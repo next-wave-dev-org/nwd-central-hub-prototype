@@ -145,7 +145,8 @@ function ManageUsersContent() {
         if (sortCol === 'name')   { av = (a.name ?? '').toLowerCase(); bv = (b.name ?? '').toLowerCase() }
         if (sortCol === 'email')  { av = a.email.toLowerCase();        bv = b.email.toLowerCase() }
         if (sortCol === 'role')   { av = a.role;                       bv = b.role }
-        if (sortCol === 'status') { av = a.is_temporary_password ? '1' : '0'; bv = b.is_temporary_password ? '1' : '0' }
+        if (sortCol === 'status')  { av = a.is_temporary_password ? '1' : '0'; bv = b.is_temporary_password ? '1' : '0' }
+        if (sortCol === 'created') { av = a.created_at ?? ''; bv = b.created_at ?? '' }
         return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
       })
     }
