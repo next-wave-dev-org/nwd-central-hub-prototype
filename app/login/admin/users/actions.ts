@@ -3,7 +3,7 @@
 import { generateTemporaryPassword } from '@/lib/password'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { sendWelcomeEmail } from '@/lib/email/sendWelcomeEmail'
-import type { UserProfile } from '@/types/auth'
+import type { UserProfile, UserRole } from '@/types/auth'
 
 export type GetUsersResult =
   | { success: true; users: UserProfile[] }
