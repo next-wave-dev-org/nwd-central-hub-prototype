@@ -262,7 +262,11 @@ function ManageUsersContent() {
     ))
     setEditingId(null)
     setEditSaving(true)
-    const result = await updateUser(user.id, { name: editName, email: editEmail, role: editRole })
+    const result = await updateUser(user.id, {
+      name: editName,
+      ...(editEmail !== user.email ? { email: editEmail } : {}),
+      role: editRole,
+    })
     if (!result.success) {
       setUsers(prev)
       setEditingId(user.id)
