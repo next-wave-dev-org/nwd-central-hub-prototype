@@ -186,6 +186,10 @@ function ManageUsersContent() {
     setCreating(false)
   }
 
+  function toggleExpand(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id))
+  }
+
   async function handleDelete(user: UserProfile) {
     if (!confirm(`Delete ${user.name ?? user.email}? This cannot be undone.`)) return
     setDeletingId(user.id)
@@ -194,6 +198,7 @@ function ManageUsersContent() {
     const result = await deleteUser(user.id)
 
     if (result.success) {
+      setExpandedId(null)
       await loadUsers()
     } else {
       setDeleteError(result.error)
