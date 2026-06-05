@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import { useAuth } from '@/components/AuthProvider'
 import { createUser } from './create/actions'
 import { getUsers, resetUserPassword, deleteUser } from './actions'
 import type { UserRole, UserProfile } from '@/types/auth'
@@ -84,6 +85,8 @@ function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol | 
 }
 
 function ManageUsersContent() {
+  const { profile: currentUser } = useAuth()
+
   // ── Create form state ──
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -167,6 +170,9 @@ function ManageUsersContent() {
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+
+    if (role === 'admin' && !confirm(`Grant admin access to ${name || email}? Admins can create and delete users.`)) return
+
     setCreating(true)
     setCreateError(null)
     setCreateSuccess(null)
@@ -205,7 +211,10 @@ function ManageUsersContent() {
         setDeleteError({ id: user.id, message: result.error })
       }
     } catch (err) {
-      setDeleteError({ id: user.id, message: err instanceof Error ? err.message : 'Unexpected error' })
+      // Catches Next.js "unexpected response" and other transport-level errors
+      const msg = err instanceof Error ? err.message : 'Unexpected error — the user may have been deleted. Refresh to confirm.'
+      setDeleteError({ id: user.id, message: msg })
+      await loadUsers()
     } finally {
       setDeletingId(null)
     }
@@ -279,7 +288,7 @@ function ManageUsersContent() {
         <div className="max-w-5xl mx-auto flex flex-col gap-10">
 
           {/* ── Create User ── */}
-          <section className="max-w-md">
+          <section>
             <p
               className="text-xs font-semibold tracking-widest mb-1"
               style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}
@@ -321,7 +330,7 @@ function ManageUsersContent() {
               </div>
             )}
 
-            <form onSubmit={handleCreate} className="flex flex-col gap-4">
+            <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700" htmlFor="name">Name</label>
                 <input
@@ -365,14 +374,16 @@ function ManageUsersContent() {
                 </select>
               </div>
 
-              <button
-                type="submit"
-                disabled={creating}
-                className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
-                style={{ background: 'var(--nwd-teal)' }}
-              >
-                {creating ? 'Creating...' : 'Create User'}
-              </button>
+              <div className="flex flex-col justify-end">
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+                  style={{ background: 'var(--nwd-teal)' }}
+                >
+                  {creating ? 'Creating...' : 'Create User'}
+                </button>
+              </div>
             </form>
           </section>
 
@@ -535,6 +546,7 @@ function ManageUsersContent() {
                         const isResetting = resettingId === user.id
                         const isDeleting = deletingId === user.id
                         const anyBusy = resettingId !== null || deletingId !== null
+                        const isSelf = currentUser?.id === user.id
                         const createdAt = user.created_at
                           ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                           : '—'
@@ -620,10 +632,11 @@ function ManageUsersContent() {
                                         {isResetting ? 'Sending…' : 'Reset Password'}
                                       </button>
                                     )}
-                                    {/* Red — delete user */}
+                                    {/* Red — delete user (disabled for current user) */}
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleDelete(user) }}
-                                      disabled={anyBusy}
+                                      disabled={anyBusy || isSelf}
+                                      title={isSelf ? 'You cannot delete your own account' : undefined}
                                       className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                       style={{
                                         borderColor: '#f43f5e',
