@@ -223,11 +223,11 @@ function ManageUsersContent() {
   }
 
   const COLUMNS: { label: string; key: SortCol | null }[] = [
-    { label: 'Name',    key: 'name' },
-    { label: 'Email',   key: 'email' },
-    { label: 'Role',    key: 'role' },
-    { label: 'Status',  key: 'status' },
-    { label: 'Actions', key: null },
+    { label: 'Name',       key: 'name' },
+    { label: 'Email',      key: 'email' },
+    { label: 'Role',       key: 'role' },
+    { label: 'Status',     key: 'status' },
+    { label: 'Created At', key: 'created' },
   ]
 
   return (
