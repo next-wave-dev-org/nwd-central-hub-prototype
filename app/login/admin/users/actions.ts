@@ -57,3 +57,26 @@ export async function resetUserPassword(
 
   return { success: true, temporaryPassword }
 }
+
+export type DeleteUserResult =
+  | { success: true }
+  | { success: false; error: string }
+
+export async function deleteUser(userId: string): Promise<DeleteUserResult> {
+  const { error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .delete()
+    .eq('id', userId)
+
+  if (profileError) {
+    return { success: false, error: profileError.message }
+  }
+
+  const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+
+  if (authError) {
+    return { success: false, error: authError.message }
+  }
+
+  return { success: true }
+}
