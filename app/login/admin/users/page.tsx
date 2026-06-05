@@ -102,7 +102,7 @@ function ManageUsersContent() {
   const [resetError, setResetError] = useState<string | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null)
 
   // ── Table controls ──
   const [search, setSearch] = useState('')
@@ -199,12 +199,13 @@ function ManageUsersContent() {
       const result = await deleteUser(user.id)
       if (result.success) {
         setExpandedId(null)
+        setDeleteError(null)
         await loadUsers()
       } else {
-        setDeleteError(result.error)
+        setDeleteError({ id: user.id, message: result.error })
       }
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Unexpected error')
+      setDeleteError({ id: user.id, message: err instanceof Error ? err.message : 'Unexpected error' })
     } finally {
       setDeletingId(null)
     }

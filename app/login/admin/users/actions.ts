@@ -64,25 +64,29 @@ export type DeleteUserResult =
 
 export async function deleteUser(userId: string): Promise<DeleteUserResult> {
   try {
-    // Attempt to delete the auth user — ignore "not found" in case the profile
-    // exists without a corresponding auth record (e.g. created directly in the DB)
+    console.log('[deleteUser] attempting auth deletion for', userId)
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    console.log('[deleteUser] auth result:', authError ?? 'ok')
+
     if (authError && !authError.message.toLowerCase().includes('not found')) {
-      return { success: false, error: authError.message }
+      return { success: false, error: `Auth error: ${authError.message}` }
     }
 
-    // Always delete the profile row directly
+    console.log('[deleteUser] attempting profile deletion for', userId)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .delete()
       .eq('id', userId)
+    console.log('[deleteUser] profile result:', profileError ?? 'ok')
 
     if (profileError) {
-      return { success: false, error: profileError.message }
+      return { success: false, error: `Profile error: ${profileError.message}` }
     }
 
     return { success: true }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Unexpected error' }
+    const message = err instanceof Error ? err.message : 'Unexpected error'
+    console.error('[deleteUser] exception:', message)
+    return { success: false, error: message }
   }
 }
