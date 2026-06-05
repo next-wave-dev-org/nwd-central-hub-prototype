@@ -535,59 +535,96 @@ function ManageUsersContent() {
                     <tbody className="bg-white divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
                       {pagedUsers.map((user) => {
                         const isPending = user.is_temporary_password ?? false
+                        const isExpanded = expandedId === user.id
                         const isResetting = resettingId === user.id
                         const isDeleting = deletingId === user.id
                         const anyBusy = resettingId !== null || deletingId !== null
+                        const createdAt = user.created_at
+                          ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '—'
 
                         return (
-                          <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
-                              {user.name ?? '—'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                              {user.email}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <RoleBadge role={user.role} />
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <StatusBadge pending={isPending} />
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                {/* Teal — send/resend invitation */}
-                                <button
-                                  onClick={() => handleReset(user)}
-                                  disabled={anyBusy}
-                                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  style={{
-                                    borderColor: 'var(--nwd-teal)',
-                                    color: isResetting ? '#6b7280' : 'var(--nwd-teal)',
-                                    background: isResetting
-                                      ? 'color-mix(in srgb, #6b7280 8%, white)'
-                                      : 'color-mix(in srgb, var(--nwd-teal) 8%, white)',
-                                  }}
-                                >
-                                  {isResetting ? 'Sending…' : isPending ? 'Resend Invitation' : 'Reset Password'}
-                                </button>
-                                {/* Red — delete user */}
-                                <button
-                                  onClick={() => handleDelete(user)}
-                                  disabled={anyBusy}
-                                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  style={{
-                                    borderColor: '#f43f5e',
-                                    color: isDeleting ? '#6b7280' : '#f43f5e',
-                                    background: isDeleting
-                                      ? 'color-mix(in srgb, #6b7280 8%, white)'
-                                      : 'color-mix(in srgb, #f43f5e 8%, white)',
-                                  }}
-                                >
-                                  {isDeleting ? 'Deleting…' : 'Delete'}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                          <React.Fragment key={user.id}>
+                            {/* User row — click to expand */}
+                            <tr
+                              onClick={() => toggleExpand(user.id)}
+                              className="cursor-pointer transition-colors"
+                              style={{ background: isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : undefined }}
+                              onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--nwd-surface)' }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : '' }}
+                            >
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <svg
+                                    className="w-3 h-3 flex-shrink-0 transition-transform"
+                                    style={{
+                                      color: isExpanded ? 'var(--nwd-teal)' : '#d1d5db',
+                                      transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                    }}
+                                    fill="none" viewBox="0 0 8 12" stroke="currentColor" strokeWidth="2"
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2 2l4 4-4 4" />
+                                  </svg>
+                                  {user.name ?? '—'}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                                {user.email}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <RoleBadge role={user.role} />
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <StatusBadge pending={isPending} />
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap" style={{ fontFamily: 'var(--font-geist-mono)' }}>
+                                {createdAt}
+                              </td>
+                            </tr>
+
+                            {/* Expanded action row */}
+                            {isExpanded && (
+                              <tr style={{ background: 'color-mix(in srgb, var(--nwd-teal) 5%, white)', borderTop: 'none' }}>
+                                <td colSpan={5} className="px-6 py-4" style={{ borderTop: `1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)` }}>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-400 mr-2" style={{ fontFamily: 'var(--font-geist-mono)' }}>
+                                      {user.name ?? user.email}
+                                    </span>
+                                    {/* Teal — resend invitation / reset password */}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleReset(user) }}
+                                      disabled={anyBusy}
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      style={{
+                                        borderColor: 'var(--nwd-teal)',
+                                        color: isResetting ? '#6b7280' : 'var(--nwd-teal)',
+                                        background: isResetting
+                                          ? 'color-mix(in srgb, #6b7280 8%, white)'
+                                          : 'color-mix(in srgb, var(--nwd-teal) 8%, white)',
+                                      }}
+                                    >
+                                      {isResetting ? 'Sending…' : isPending ? 'Resend Invitation' : 'Reset Password'}
+                                    </button>
+                                    {/* Red — delete user */}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleDelete(user) }}
+                                      disabled={anyBusy}
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      style={{
+                                        borderColor: '#f43f5e',
+                                        color: isDeleting ? '#6b7280' : '#f43f5e',
+                                        background: isDeleting
+                                          ? 'color-mix(in srgb, #6b7280 8%, white)'
+                                          : 'color-mix(in srgb, #f43f5e 8%, white)',
+                                      }}
+                                    >
+                                      {isDeleting ? 'Deleting…' : 'Delete'}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
                         )
                       })}
                     </tbody>
