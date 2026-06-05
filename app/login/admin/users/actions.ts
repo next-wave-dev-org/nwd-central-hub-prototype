@@ -63,20 +63,26 @@ export type DeleteUserResult =
   | { success: false; error: string }
 
 export async function deleteUser(userId: string): Promise<DeleteUserResult> {
-  const { error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .delete()
-    .eq('id', userId)
+  try {
+    // Delete auth user first — Supabase may cascade-delete the profile row
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    if (authError) {
+      return { success: false, error: authError.message }
+    }
 
-  if (profileError) {
-    return { success: false, error: profileError.message }
+    // Delete profile row in case cascade is not configured
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', userId)
+
+    // Ignore "not found" — cascade already removed it
+    if (profileError && !profileError.message.includes('0 rows')) {
+      return { success: false, error: profileError.message }
+    }
+
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unexpected error' }
   }
-
-  const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
-
-  if (authError) {
-    return { success: false, error: authError.message }
-  }
-
-  return { success: true }
 }

@@ -143,8 +143,8 @@ function ManageUsersContent() {
       result.sort((a, b) => {
         let av = '', bv = ''
         if (sortCol === 'name')   { av = (a.name ?? '').toLowerCase(); bv = (b.name ?? '').toLowerCase() }
-        if (sortCol === 'email')  { av = a.email.toLowerCase();        bv = b.email.toLowerCase() }
-        if (sortCol === 'role')   { av = a.role;                       bv = b.role }
+        if (sortCol === 'email')  { av = (a.email ?? '').toLowerCase(); bv = (b.email ?? '').toLowerCase() }
+        if (sortCol === 'role')   { av = a.role ?? '';                  bv = b.role ?? '' }
         if (sortCol === 'status')  { av = a.is_temporary_password ? '1' : '0'; bv = b.is_temporary_password ? '1' : '0' }
         if (sortCol === 'created') { av = a.created_at ?? ''; bv = b.created_at ?? '' }
         return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
@@ -195,15 +195,19 @@ function ManageUsersContent() {
     setDeletingId(user.id)
     setDeleteError(null)
 
-    const result = await deleteUser(user.id)
-
-    if (result.success) {
-      setExpandedId(null)
-      await loadUsers()
-    } else {
-      setDeleteError(result.error)
+    try {
+      const result = await deleteUser(user.id)
+      if (result.success) {
+        setExpandedId(null)
+        await loadUsers()
+      } else {
+        setDeleteError(result.error)
+      }
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Unexpected error')
+    } finally {
+      setDeletingId(null)
     }
-    setDeletingId(null)
   }
 
   async function handleReset(user: UserProfile) {
@@ -590,26 +594,45 @@ function ManageUsersContent() {
                                     <span className="text-xs text-gray-400 mr-2" style={{ fontFamily: 'var(--font-geist-mono)' }}>
                                       {user.name ?? user.email}
                                     </span>
-                                    {/* Teal — resend invitation / reset password */}
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); handleReset(user) }}
-                                      disabled={anyBusy}
-                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                      style={{
-                                        borderColor: 'var(--nwd-teal)',
-                                        color: isResetting ? '#6b7280' : 'var(--nwd-teal)',
-                                        background: isResetting
-                                          ? 'color-mix(in srgb, #6b7280 8%, white)'
-                                          : 'color-mix(in srgb, var(--nwd-teal) 8%, white)',
-                                      }}
-                                    >
-                                      {isResetting ? 'Sending…' : isPending ? 'Resend Invitation' : 'Reset Password'}
-                                    </button>
+                                    {/* Teal — resend invitation (pending users only) */}
+                                    {isPending && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleReset(user) }}
+                                        disabled={anyBusy}
+                                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                        style={{
+                                          borderColor: 'var(--nwd-teal)',
+                                          color: isResetting ? '#6b7280' : 'var(--nwd-teal)',
+                                          background: isResetting
+                                            ? 'color-mix(in srgb, #6b7280 8%, white)'
+                                            : 'color-mix(in srgb, var(--nwd-teal) 8%, white)',
+                                        }}
+                                      >
+                                        {isResetting ? 'Sending…' : 'Resend Invitation'}
+                                      </button>
+                                    )}
+                                    {/* Purple — reset password (active users only) */}
+                                    {!isPending && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleReset(user) }}
+                                        disabled={anyBusy}
+                                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                        style={{
+                                          borderColor: 'var(--nwd-purple)',
+                                          color: isResetting ? '#6b7280' : 'var(--nwd-purple)',
+                                          background: isResetting
+                                            ? 'color-mix(in srgb, #6b7280 8%, white)'
+                                            : 'color-mix(in srgb, var(--nwd-purple) 8%, white)',
+                                        }}
+                                      >
+                                        {isResetting ? 'Sending…' : 'Reset Password'}
+                                      </button>
+                                    )}
                                     {/* Red — delete user */}
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleDelete(user) }}
                                       disabled={anyBusy}
-                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                       style={{
                                         borderColor: '#f43f5e',
                                         color: isDeleting ? '#6b7280' : '#f43f5e',
