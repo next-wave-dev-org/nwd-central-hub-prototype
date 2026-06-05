@@ -12,7 +12,7 @@ export type GetUsersResult =
 export async function getUsers(): Promise<GetUsersResult> {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, role, is_temporary_password')
+    .select('id, email, name, role, is_temporary_password, created_at')
     .order('created_at', { ascending: false })
 
   if (error) {

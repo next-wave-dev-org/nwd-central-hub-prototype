@@ -16,7 +16,7 @@ const ROLE_STYLES: Record<UserRole, { color: string; label: string }> = {
   admin:      { color: '#6b7280', label: 'Admin' },
 }
 
-type SortCol = 'name' | 'email' | 'role' | 'status'
+type SortCol = 'name' | 'email' | 'role' | 'status' | 'created'
 type SortDir = 'asc' | 'desc'
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -97,7 +97,7 @@ function ManageUsersContent() {
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [usersError, setUsersError] = useState<string | null>(null)
 
-  // ── Reset state ──
+  // ── Reset / delete state ──
   const [resetResult, setResetResult] = useState<{ password: string; email: string } | null>(null)
   const [resetError, setResetError] = useState<string | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
@@ -106,9 +106,10 @@ function ManageUsersContent() {
 
   // ── Table controls ──
   const [search, setSearch] = useState('')
-  const [sortCol, setSortCol] = useState<SortCol | null>(null)
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [sortCol, setSortCol] = useState<SortCol | null>('created')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [page, setPage] = useState(0)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true)
