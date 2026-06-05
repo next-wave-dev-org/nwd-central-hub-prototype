@@ -94,7 +94,9 @@ export async function updateUser(
     const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
       email: updates.email,
     })
-    if (authError) return { success: false, error: authError.message }
+    if (authError && !authError.message.toLowerCase().includes('not found')) {
+      return { success: false, error: authError.message }
+    }
   }
 
   const profileUpdates: Record<string, unknown> = {}
