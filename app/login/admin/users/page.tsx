@@ -433,15 +433,6 @@ function ManageUsersContent() {
               </div>
             )}
 
-            {deleteError && (
-              <div
-                className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2"
-                style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}
-              >
-                <span>{deleteError}</span>
-                <button onClick={() => setDeleteError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
-              </div>
-            )}
 
             {/* Search bar */}
             <div className="mb-3 relative">
@@ -645,6 +636,11 @@ function ManageUsersContent() {
                                       {isDeleting ? 'Deleting…' : 'Delete'}
                                     </button>
                                   </div>
+                                  {deleteError?.id === user.id && (
+                                    <p className="mt-3 text-xs font-medium" style={{ color: '#9f1239', fontFamily: 'var(--font-geist-mono)' }}>
+                                      {deleteError.message}
+                                    </p>
+                                  )}
                                 </td>
                               </tr>
                             )}
