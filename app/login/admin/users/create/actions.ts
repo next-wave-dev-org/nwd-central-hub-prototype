@@ -2,6 +2,7 @@
 
 import { randomInt } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { sendWelcomeEmail } from '@/lib/email/sendWelcomeEmail'
 import type { UserRole } from '@/types/auth'
 
 function generateTemporaryPassword(): string {
@@ -65,5 +66,16 @@ export async function createUser(
     return { success: false, error: profileError.message }
   }
 
+  const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL}/login`
+
+  await sendWelcomeEmail({
+    email,
+    temporaryPassword,
+    loginUrl,
+  })
+
   return { success: true, temporaryPassword }
+
+   
+
 }

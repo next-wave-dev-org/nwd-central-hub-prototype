@@ -13,7 +13,7 @@ const ROLE_ROUTES: { prefix: string; role: UserRole }[] = [
 ]
 
 // Routes that require authentication but no specific role
-const AUTHENTICATED_PREFIXES = ['/proposals']
+const AUTHENTICATED_PREFIXES = ['/proposals', '/login/proposals']
 
 // Routes that anyone (including unauthenticated users) can access
 const PUBLIC_ROUTES = new Set(['/', '/login', '/unauthorized', '/test-supabase'])

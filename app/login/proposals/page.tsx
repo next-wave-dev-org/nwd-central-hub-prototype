@@ -16,7 +16,12 @@ export default function SubmissionsList() {
 
   useEffect(() => {
     const data = localStorage.getItem('proposals');
-    if (data) setProposals(JSON.parse(data));
+  
+    if (data) {
+      queueMicrotask(() => {
+        setProposals(JSON.parse(data));
+      });
+    }
   }, []);
 
   return (
@@ -31,7 +36,7 @@ export default function SubmissionsList() {
           </h1>
 
           <Link
-            href="/proposals/new"
+            href="/login/proposals/new"
             className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
           >
             + New Proposal

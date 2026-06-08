@@ -34,7 +34,7 @@ export default function NewProposal() {
 
     await new Promise((res) => setTimeout(res, 500));
 
-    router.push('/proposals');
+    router.push('/login/proposals');
 
     setIsSubmitting(false);
   };

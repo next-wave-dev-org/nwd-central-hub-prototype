@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
+import Image from 'next/image'
 
 type Project = {
   id: string
@@ -61,11 +60,52 @@ function ContractorContent() {
     setLoading(false)
   }
 
-  async function requestAccess(projectId: string) {
-    setRequesting(projectId)
-    const { error } = await supabase
-      .from('proposal_requests')
-      .insert({ contractor_id: profile!.id, project_id: projectId, status: 'pending' })
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
+
+      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Image
+            src="/NextWaveDev_FINAL_small.png"
+            alt="NextWaveDev logo"
+            width={36}
+            height={36}
+            className="object-contain"
+          />
+          <div>
+            <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
+              NextWaveDev
+            </span>
+            <span className="text-gray-400 mx-2 select-none">/</span>
+            <span className="text-sm text-gray-500 font-medium">Contractor Dashboard</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-6 py-14">
+        <div className="mb-12">
+          <p
+            className="text-xs font-semibold tracking-widest mb-2"
+            style={{
+              color: 'var(--nwd-teal)',
+              fontFamily: 'var(--font-geist-mono)',
+            }}
+          >
+            CONTRACTOR
+          </p>
+
+          <div className="flex items-end justify-between gap-4">
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+              Active Projects
+            </h1>
+
+            {!loading && (
+              <span className="mb-1 bg-stone-900 text-white text-xs font-semibold px-4 py-1.5 rounded-full">
+                {projects.length} project{projects.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        </div>
 
     if (!error) {
       setRequestMap((prev) => ({ ...prev, [projectId]: 'pending' }))
@@ -99,22 +139,15 @@ function ContractorContent() {
               <span className="text-sm text-gray-500 font-medium">Contractor Dashboard</span>
             </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-3">
-            <a
-              href="https://clockify.me"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
-            >
-              Log Hours
-            </a>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
-            >
-              Sign out
-            </button>
+        {!loading && projects.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+            <span className="text-5xl">📋</span>
+            <p className="text-lg font-bold text-stone-800 mt-2">No active projects</p>
+            <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
+              You have no active projects assigned right now. Check back later.
+            </p>
           </div>
         </div>
       </header>
@@ -242,8 +275,8 @@ function ContractorContent() {
         </section>
 
       </main>
-
-      <footer className="text-center py-6 px-4 mt-auto">
+      
+      <footer className="text-center py-6 px-4">
         <p
           className="text-xs tracking-wide"
           style={{ color: 'var(--nwd-purple)', opacity: 0.4, fontFamily: 'var(--font-geist-mono)' }}
@@ -252,23 +285,6 @@ function ContractorContent() {
         </p>
       </footer>
 
-    </div>
-  )
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-4">
-      <div className="w-8 h-8 rounded-full border-[3px] border-gray-200 border-t-gray-600 animate-spin" />
-      <p className="text-sm text-gray-400">Fetching…</p>
-    </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-      <p className="text-sm text-gray-400 max-w-xs leading-relaxed">{message}</p>
     </div>
   )
 }
