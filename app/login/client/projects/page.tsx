@@ -22,9 +22,9 @@ export default function ClientProjectsPage() {
 
     const fetchProjects = async () => {
       const { data, error } = await supabase
-        .from('projects_table')
+        .from('projects')
         .select('id, title, description')
-        .eq('status', 'Active')
+        .eq('status', 'active')
         .eq('client_id', profile.id)
 
       if (!error) {

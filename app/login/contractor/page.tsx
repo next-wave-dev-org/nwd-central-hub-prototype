@@ -22,10 +22,9 @@ function ContractorContent() {
 
     const fetchProjects = async () => {
       const { data, error } = await supabase
-        .from('projects_table')
+        .from('projects')
         .select('id, title, description')
-        .eq('status', 'Active')
-        .eq('contractor_id', profile.id)
+        .eq('status', 'active')
 
       if (!error) setProjects(data || [])
       setLoading(false)

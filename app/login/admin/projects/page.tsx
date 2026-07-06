@@ -18,9 +18,9 @@ export default function AdminProjectsPage() {
   useEffect(() => {
     const fetchProjects = async () => {
       const { data, error } = await supabase
-        .from('projects_table')
+        .from('projects')
         .select('id, title, description')
-        .eq('status', 'Active')
+        .eq('status', 'active')
 
       if (!error) {
         setProjects(data || [])
