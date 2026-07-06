@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
-import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 
 type Project = {
@@ -12,20 +11,16 @@ type Project = {
   description: string
 }
 
-export default function ClientProjectsPage() {
-  const { profile } = useAuth()
+export default function AdminProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!profile) return
-
     const fetchProjects = async () => {
       const { data, error } = await supabase
         .from('projects_table')
         .select('id, title, description')
         .eq('status', 'Active')
-        .eq('client_id', profile.id)
 
       if (!error) {
         setProjects(data || [])
@@ -35,15 +30,15 @@ export default function ClientProjectsPage() {
     }
 
     fetchProjects()
-  }, [profile])
+  }, [])
 
   return (
-    <RouteGuard allowedRoles={['client']}>
+    <RouteGuard allowedRoles={['admin']}>
       <Navbar />
 
       <main className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-8">
-          Client Active Projects
+          Admin Active Projects
         </h1>
 
         {loading && (
