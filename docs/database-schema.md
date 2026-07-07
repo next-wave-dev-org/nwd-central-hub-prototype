@@ -90,21 +90,22 @@ draft → submitted → approved
 Created automatically when an admin approves a proposal. The `approveProposal` server action in `app/login/admin/proposals/actions.ts` updates the proposal status to `approved` and inserts the projects row atomically.
 
 ```sql
-id            uuid       PRIMARY KEY DEFAULT gen_random_uuid()
-proposal_id   uuid       NOT NULL REFERENCES proposals(id)
-client_id     uuid       NOT NULL REFERENCES profiles(id)
-title         text
-description   text
-budget        text
-status        text       DEFAULT 'active'
-created_at    timestamptz DEFAULT now()
+id                  uuid       PRIMARY KEY DEFAULT gen_random_uuid()
+proposal_id         uuid       NOT NULL REFERENCES proposals(id)
+client_id           uuid       NOT NULL REFERENCES profiles(id)
+title               text
+description         text
+budget              text
+status              text       DEFAULT 'active'
+github_project_url  text
+created_at          timestamptz DEFAULT now()
 ```
 
 **Notes:**
 - `proposal_id` and `client_id` are copied from the source proposal at approval time.
 - `title`, `description`, and `budget` are copied from the source proposal at approval time.
 - Contractor linkage is handled via `contractor_projects` (see below), not a column on this table.
-- The workspace page (`/projects/[id]`) is pending #55.
+- `github_project_url` is optional; when set, a "View Project Board" link is shown in the workspace. Added in #55.
 
 **Source of truth:** `app/login/admin/proposals/actions.ts`
 
