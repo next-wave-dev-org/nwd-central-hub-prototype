@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import { useAuth } from '@/components/AuthProvider'
@@ -256,7 +257,13 @@ function ContractorContent() {
                               >
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2 2l4 4-4 4" />
                               </svg>
-                              {project.title}
+                              <Link
+                                href={`/login/projects/${project.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:underline"
+                              >
+                                {project.title}
+                              </Link>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
@@ -365,7 +372,13 @@ function ContractorContent() {
                               >
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2 2l4 4-4 4" />
                               </svg>
-                              {project.title}
+                              <Link
+                                href={`/login/projects/${project.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:underline"
+                              >
+                                {project.title}
+                              </Link>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
@@ -18,9 +19,9 @@ export default function AdminProjectsPage() {
   useEffect(() => {
     const fetchProjects = async () => {
       const { data, error } = await supabase
-        .from('projects_table')
+        .from('projects')
         .select('id, title, description')
-        .eq('status', 'Active')
+        .eq('status', 'active')
 
       if (!error) {
         setProjects(data || [])
@@ -54,9 +55,10 @@ export default function AdminProjectsPage() {
         {!loading && projects.length > 0 && (
           <div className="grid gap-4">
             {projects.map((project) => (
-              <div
+              <Link
                 key={project.id}
-                className="p-6 border rounded-lg shadow hover:shadow-md transition"
+                href={`/login/projects/${project.id}`}
+                className="block p-6 border rounded-lg shadow hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer"
               >
                 <h2 className="text-lg font-bold mb-2">
                   {project.title}
@@ -65,7 +67,7 @@ export default function AdminProjectsPage() {
                 <p className="text-gray-600">
                   {project.description}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
         )}
