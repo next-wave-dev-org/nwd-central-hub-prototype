@@ -40,6 +40,21 @@ function RequestStatusBadge({ status }: { status: 'available' | RequestStatus })
   )
 }
 
+function ActiveStatusBadge() {
+  return (
+    <span
+      className="text-xs font-semibold tracking-wider px-2 py-0.5 rounded"
+      style={{
+        color: '#059669',
+        background: 'color-mix(in srgb, #059669 12%, transparent)',
+        fontFamily: 'var(--font-geist-mono)',
+      }}
+    >
+      Active
+    </span>
+  )
+}
+
 function ContractorContent() {
   const { profile } = useAuth()
   const router = useRouter()
@@ -195,27 +210,91 @@ function ContractorContent() {
           ) : activeProjects.length === 0 ? (
             <EmptyState message="You have no active projects assigned right now. Check back later." />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeProjects.map((project) => (
-                <div
-                  key={project.id}
-                  className="border rounded-2xl overflow-hidden flex flex-col"
-                  style={{ borderColor: 'var(--nwd-border)' }}
-                >
-                  <div className="h-1.5 bg-gradient-to-r from-gray-700 to-gray-400" />
-                  <div className="p-6 flex flex-col gap-3 flex-1">
-                    <span className="self-start text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-0.5">
-                      ● Active
-                    </span>
-                    <h2 className="text-lg font-bold text-gray-900 leading-snug tracking-tight">
-                      {project.title}
-                    </h2>
-                    <p className="text-sm text-gray-500 leading-relaxed flex-1">
-                      {project.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
+            <div className="border rounded-lg overflow-x-auto" style={{ borderColor: 'var(--nwd-border)' }}>
+              <table className="min-w-full divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
+                <thead>
+                  <tr style={{ background: 'var(--nwd-surface)' }}>
+                    {['Title', 'Budget', 'Status', 'Actions'].map((label) => (
+                      <th
+                        key={label}
+                        className={`px-4 py-3 text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap ${label === 'Actions' ? 'text-right' : 'text-left'}`}
+                        style={{ fontFamily: 'var(--font-geist-mono)' }}
+                      >
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
+                  {activeProjects.map((project) => {
+                    const isExpanded = expandedId === project.id
+
+                    return (
+                      <React.Fragment key={project.id}>
+                        <tr
+                          onClick={() => setExpandedId((prev) => (prev === project.id ? null : project.id))}
+                          className="cursor-pointer transition-colors"
+                          style={{ background: isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : undefined }}
+                          onMouseEnter={(e) => {
+                            if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--nwd-surface)'
+                          }}
+                          onMouseLeave={(e) => {
+                            ;(e.currentTarget as HTMLElement).style.background = isExpanded
+                              ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)'
+                              : ''
+                          }}
+                        >
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <svg
+                                className="w-3 h-3 flex-shrink-0 transition-transform"
+                                style={{
+                                  color: isExpanded ? 'var(--nwd-teal)' : '#d1d5db',
+                                  transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                }}
+                                fill="none" viewBox="0 0 8 12" stroke="currentColor" strokeWidth="2"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2 2l4 4-4 4" />
+                              </svg>
+                              {project.title}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                            {project.budget ? `$${project.budget}` : '—'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <ActiveStatusBadge />
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex justify-end">
+                              <span className="text-xs text-gray-300">—</span>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr style={{ background: 'color-mix(in srgb, var(--nwd-teal) 5%, white)', borderTop: 'none' }}>
+                            <td
+                              colSpan={4}
+                              className="px-6 py-4"
+                              style={{ borderTop: '1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)' }}
+                            >
+                              <p className="text-xs font-semibold tracking-widest mb-2" style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}>
+                                DESCRIPTION
+                              </p>
+                              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                                {project.description?.trim() || (
+                                  <span className="text-gray-400 italic">No description provided.</span>
+                                )}
+                              </p>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
