@@ -20,6 +20,13 @@ const adminItems = [
     tag: 'USERS',
   },
   {
+    href: '/login/admin/requests',
+    label: 'Pending Requests',
+    description: 'Review contractor requests to join projects',
+    accent: 'var(--nwd-purple)',
+    tag: 'REQUESTS',
+  },
+  {
     href: '/login/admin/projects',
     label: 'Active Projects',
     description: 'View all active projects across the platform',
