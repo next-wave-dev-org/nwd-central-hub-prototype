@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/components/AuthProvider'
 import { createUser } from './create/actions'
 import { getUsers, resetUserPassword, deleteUser, updateUser } from './actions'
@@ -305,6 +306,7 @@ function ManageUsersContent() {
             </svg>
             Back
           </Link>
+          <UserMenu />
         </div>
       </header>
 

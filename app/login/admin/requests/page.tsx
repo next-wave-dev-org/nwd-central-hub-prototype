@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import RouteGuard from '@/components/RouteGuard'
 import BackButton from '@/components/BackButton'
+import UserMenu from '@/components/UserMenu'
 import { supabase } from '@/lib/supabase'
 
 type RequestRow = {
@@ -104,8 +105,9 @@ function AdminRequestsContent() {
     <div className="min-h-screen" style={{ background: 'white' }}>
 
       <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
-        <div className="max-w-3xl mx-auto px-6 py-4">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <BackButton />
+          <UserMenu />
         </div>
       </header>
 

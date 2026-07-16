@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 
 const clientItems = [
   {
@@ -41,7 +42,7 @@ function ClientDashboardContent() {
             height={36}
             className="object-contain"
           />
-          <div>
+          <div className="flex items-center flex-1 min-w-0">
             <span
               className="font-semibold text-base tracking-tight"
               style={{ color: 'var(--nwd-purple)' }}
@@ -53,6 +54,7 @@ function ClientDashboardContent() {
               Client Dashboard
             </span>
           </div>
+          <UserMenu />
         </div>
       </header>
 
