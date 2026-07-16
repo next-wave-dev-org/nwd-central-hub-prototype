@@ -13,9 +13,9 @@ const adminItems = [
     tag: 'PROPOSALS',
   },
   {
-    href: '/login/admin/users/create',
-    label: 'Create User',
-    description: 'Add a new client, contractor, or admin',
+    href: '/login/admin/users',
+    label: 'Manage Users',
+    description: 'Create users and manage all clients and contractors',
     accent: 'var(--nwd-teal)',
     tag: 'USERS',
   },
