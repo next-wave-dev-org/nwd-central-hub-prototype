@@ -127,7 +127,7 @@ function AdminRequestsContent() {
         {error && (
           <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+            <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
           </div>
         )}
 
@@ -185,14 +185,14 @@ function AdminRequestsContent() {
                   <button
                     onClick={() => approveRequest(req)}
                     disabled={acting === req.id}
-                    className="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-900 text-white hover:bg-gray-700 transition-colors disabled:opacity-50"
+                    className="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-900 text-white hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {acting === req.id ? 'Approving…' : 'Approve'}
                   </button>
                   <button
                     onClick={() => rejectRequest(req.id)}
                     disabled={acting === req.id}
-                    className="px-4 py-1.5 rounded-full text-sm font-semibold border text-gray-600 hover:border-red-300 hover:text-red-600 transition-colors disabled:opacity-50"
+                    className="px-4 py-1.5 rounded-full text-sm font-semibold border text-gray-600 hover:border-red-300 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ borderColor: 'var(--nwd-border)' }}
                   >
                     Reject
