@@ -19,6 +19,7 @@ function AdminRequestsContent() {
   const [requests, setRequests] = useState<RequestRow[]>([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchRequests()
@@ -26,7 +27,8 @@ function AdminRequestsContent() {
 
   async function fetchRequests() {
     setLoading(true)
-    const { data } = await supabase
+    setError(null)
+    const { data, error } = await supabase
       .from('proposal_requests')
       .select(`
         id,
@@ -40,21 +42,40 @@ function AdminRequestsContent() {
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
 
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+      return
+    }
+
     setRequests((data as unknown as RequestRow[]) || [])
     setLoading(false)
   }
 
   async function approveRequest(req: RequestRow) {
     setActing(req.id)
+    setError(null)
 
-    await supabase
+    const { error: updateError } = await supabase
       .from('proposal_requests')
       .update({ status: 'approved' })
       .eq('id', req.id)
 
-    await supabase
+    if (updateError) {
+      setError(updateError.message)
+      setActing(null)
+      return
+    }
+
+    const { error: insertError } = await supabase
       .from('contractor_projects')
       .insert({ contractor_id: req.contractor_id, project_id: req.project_id })
+
+    if (insertError) {
+      setError(insertError.message)
+      setActing(null)
+      return
+    }
 
     await fetchRequests()
     setActing(null)
@@ -62,10 +83,19 @@ function AdminRequestsContent() {
 
   async function rejectRequest(requestId: string) {
     setActing(requestId)
-    await supabase
+    setError(null)
+
+    const { error } = await supabase
       .from('proposal_requests')
       .update({ status: 'rejected' })
       .eq('id', requestId)
+
+    if (error) {
+      setError(error.message)
+      setActing(null)
+      return
+    }
+
     await fetchRequests()
     setActing(null)
   }
@@ -93,6 +123,13 @@ function AdminRequestsContent() {
             Contractors requesting access to projects
           </p>
         </div>
+
+        {error && (
+          <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-20">

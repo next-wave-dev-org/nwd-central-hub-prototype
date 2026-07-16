@@ -13,7 +13,7 @@ const ROLE_ROUTES: { prefix: string; role: UserRole }[] = [
 ]
 
 // Routes that require authentication but no specific role
-const AUTHENTICATED_PREFIXES = ['/proposals', '/login/proposals']
+const AUTHENTICATED_PREFIXES = [''] // leaving blank for future iterations
 
 // Routes that anyone (including unauthenticated users) can access
 const PUBLIC_ROUTES = new Set(['/', '/login', '/unauthorized', '/test-supabase'])
@@ -21,8 +21,8 @@ const PUBLIC_ROUTES = new Set(['/', '/login', '/unauthorized', '/test-supabase']
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Pass through public routes immediately
-  if (PUBLIC_ROUTES.has(pathname)) {
+  // Allow public routes except homepage to pass through immediately
+  if (pathname !== '/' && PUBLIC_ROUTES.has(pathname)) {
     return NextResponse.next()
   }
 
@@ -54,8 +54,33 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Unauthenticated users cannot access any non-public route
+  // Redirect authenticated users away from homepage to their dashboard
+  if (pathname === '/' && user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const dashboardMap: Record<string, string> = {
+      admin: '/login/admin',
+      client: '/login/client',
+      contractor: '/login/contractor',
+    }
+
+    const destination = dashboardMap[profile?.role ?? '']
+
+    if (destination) {
+      return NextResponse.redirect(new URL(destination, request.url))
+    }
+  }
+
+  // Allow unauthenticated users to access homepage
   if (!user) {
+    if (pathname === '/') {
+      return NextResponse.next()
+    }
+
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

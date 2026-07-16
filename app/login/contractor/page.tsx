@@ -24,6 +24,7 @@ function ContractorContent() {
   const [requestMap, setRequestMap] = useState<RequestMap>({})
   const [loading, setLoading] = useState(true)
   const [requesting, setRequesting] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -32,8 +33,13 @@ function ContractorContent() {
 
   async function fetchData() {
     setLoading(true)
+    setError(null)
 
-    const [{ data: cpRows }, { data: allProjects }, { data: requests }] = await Promise.all([
+    const [
+      { data: cpRows, error: cpError },
+      { data: allProjects, error: projectsError },
+      { data: requests, error: requestsError },
+    ] = await Promise.all([
       supabase
         .from('contractor_projects')
         .select('project_id')
@@ -46,6 +52,13 @@ function ContractorContent() {
         .select('project_id, status')
         .eq('contractor_id', profile!.id),
     ])
+
+    const queryError = cpError || projectsError || requestsError
+    if (queryError) {
+      setError(queryError.message)
+      setLoading(false)
+      return
+    }
 
     const joinedIds = new Set((cpRows || []).map((r: any) => r.project_id))
     const all = (allProjects || []) as Project[]
@@ -63,11 +76,14 @@ function ContractorContent() {
 
   async function requestAccess(projectId: string) {
     setRequesting(projectId)
+    setError(null)
     const { error } = await supabase
       .from('proposal_requests')
       .insert({ contractor_id: profile!.id, project_id: projectId, status: 'pending' })
 
-    if (!error) {
+    if (error) {
+      setError(error.message)
+    } else {
       setRequestMap((prev) => ({ ...prev, [projectId]: 'pending' }))
     }
     setRequesting(null)
@@ -120,6 +136,13 @@ function ContractorContent() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-14 w-full flex flex-col gap-16">
+
+        {error && (
+          <div className="rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+          </div>
+        )}
 
         {/* ── Active Projects ── */}
         <section>

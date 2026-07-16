@@ -1,6 +1,6 @@
 # NWD Central Hub
 
-The Next Wave Dev Central Hub is a unified platform designed to streamline how contractors, clients, and administrators collaborate on real technical projects. Currently, the onboarding and coordination process is manual and slow, limiting the number of contractors who can be supported. This project solves that problem by creating a centralized system where projects, communication, deliverables, and user roles are all managed efficiently. The primary users are graduates (contractors), client companies, and the Next Wave Dev nonprofit team.
+The Next Wave Dev Central Hub is a unified platform designed to streamline how contractors, clients, and administrators collaborate on real technical projects. Currently, the onboarding and coordination process is manual and slow, limiting the number of contractors who can be supported. This project solves that problem by creating a centralized system where projects, communication, deliverables and user roles are all managed efficiently. The primary users are graduates (contractors), client companies and the Next Wave Dev nonprofit team.
 
 > **View the live app:** [nwd-central-hub-prototype.vercel.app](https://nwd-central-hub-prototype.vercel.app)
 
