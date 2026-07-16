@@ -40,10 +40,12 @@ export async function createUser(
     return { success: false, error: profileError.message }
   }
 
+  const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL}/login`
+
   await sendWelcomeEmail({
     email,
     temporaryPassword,
-    loginUrl: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
+    loginUrl,
   })
 
   return { success: true, temporaryPassword }

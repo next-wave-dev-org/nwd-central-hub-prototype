@@ -6,11 +6,25 @@ import RouteGuard from '@/components/RouteGuard'
 
 const adminItems = [
   {
+    href: '/login/admin/proposals',
+    label: 'Proposal Review',
+    description: 'Review submitted proposals and approve or reject them',
+    accent: 'var(--nwd-purple)',
+    tag: 'PROPOSALS',
+  },
+  {
     href: '/login/admin/users',
     label: 'Manage Users',
     description: 'Create users and manage all clients and contractors',
     accent: 'var(--nwd-teal)',
     tag: 'USERS',
+  },
+  {
+    href: '/login/admin/projects',
+    label: 'Active Projects',
+    description: 'View all active projects across the platform',
+    accent: 'var(--nwd-purple)',
+    tag: 'PROJECTS',
   },
 ]
 
