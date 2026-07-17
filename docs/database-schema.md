@@ -123,7 +123,13 @@ Path B — Admin-initiated:
   Admin creates project directly → assigns client (optional) → assigns contractor(s) (optional) → project workspace
 ```
 
-Both paths produce an identical `projects` row and land in the same `/projects/[id]` workspace. `origin` is metadata for the admin UI (see the "Active Projects" badge) — it is not read by any RLS policy or access check. **Project membership remains the sole access gate**: a client sees a project because `client_id = auth.uid()`, a contractor because a `contractor_projects` row exists, regardless of how the project was created. No RLS policy changes were needed for Path B — every existing SELECT/INSERT policy on `projects` and `contractor_projects` already works identically whether `client_id`/`proposal_id` is null or populated, since the only INSERT path for both tables has always been an admin server action using `supabaseAdmin` (which bypasses RLS entirely).
+Both paths produce an identical `projects` row and land in the same `/projects/[id]` workspace. `origin` is metadata for the admin UI (see the "Active Projects" badge) — it is not read by any RLS policy or access check. **Project membership remains the sole access gate**: a client sees a project because `client_id = auth.uid()`, a contractor because a `contractor_projects` row exists, regardless of how the project was created.
+
+**Correction:** one RLS policy *did* need a change, found during testing. The `projects` SELECT policy for clients (`client_id = auth.uid()`) works unchanged for both paths. But the existing `contractor_projects` SELECT policy for clients ("contractors assigned to their projects") turned out to be implemented as a join through `proposal_requests`, not through `projects.client_id` directly — so a client could not see contractors on an admin-initiated project, since no `proposal_requests` row exists for that path. Confirmed via direct query with the service-role client: the `projects` row and `contractor_projects` row both existed correctly, and the contractor could see the assignment via their own "own rows only" policy, but the client's query for the same row returned nothing. Fixed by adding an additional (additive/permissive — does not remove the existing policy) client SELECT policy on `contractor_projects` keyed directly off project ownership, included in the migration below.
+
+**Second correction:** the first version of that added policy used a raw subquery on `projects` (`project_id IN (SELECT id FROM projects WHERE client_id = auth.uid())`). Since the existing `projects` SELECT policy for contractors subqueries `contractor_projects` in the other direction (added in the 2026-07-15 fix — see `docs/DEVELOPER.md` §6), the two policies formed a cycle: evaluating either table's RLS re-triggered the other's, producing `infinite recursion detected in policy for relation "projects"` on effectively any authenticated query against either table. Fixed the same way this codebase already fixes this class of problem — a `STABLE SECURITY DEFINER` helper function (mirroring `public.get_my_role()`, documented in `docs/DEVELOPER.md` §6) whose inner query bypasses RLS, breaking the cycle. **If you already ran the raw-subquery version of this policy, drop and recreate it using the version below.**
+
+**Third correction:** even with the `contractor_projects` policy fixed, the client still couldn't see the assigned contractor's *name/email* — the "Assigned Contractors" section on the workspace page rendered "Unknown", and the client's project list Team section silently dropped the row (`client/projects/page.tsx` does `if (!contractor) continue` when the embedded `profiles` join comes back `null`). Root cause: this document only ever documented `profiles` SELECT as "own row" + "admin all rows" (see the `profiles` RLS table below), but the "Team" feature demonstrably worked for Path A before this issue (2026-07-15 fix) — meaning an undocumented policy must already exist in the live DB letting a client read a contractor's profile, and per the same pattern as the last two corrections, it's scoped through `proposal_requests` and doesn't cover admin-initiated projects. Confirmed the underlying data and PostgREST join shape were correct via a service-role query (plain object, not array — no data or shape bug) before concluding this was RLS. Fixed with another additive, `SECURITY DEFINER`-backed policy on `profiles`, also in the migration below.
 
 ### Migration (apply by hand in the Supabase SQL editor)
 
@@ -136,6 +142,59 @@ ALTER TABLE public.projects ALTER COLUMN client_id DROP NOT NULL;
 ALTER TABLE public.projects
   ADD COLUMN origin text NOT NULL DEFAULT 'client'
   CHECK (origin IN ('client', 'admin'));
+
+-- Drop the broken raw-subquery version of this policy if you already created it —
+-- harmless no-op if you haven't.
+DROP POLICY IF EXISTS "Clients can view contractors on their own projects" ON public.contractor_projects;
+
+-- SECURITY DEFINER breaks the RLS recursion: the inner SELECT on projects runs
+-- as the function owner (bypasses RLS) instead of re-triggering the projects
+-- table's own policies — mirrors the get_my_role() pattern in docs/DEVELOPER.md §6.
+CREATE OR REPLACE FUNCTION public.is_project_client(p_project_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.projects
+    WHERE id = p_project_id AND client_id = auth.uid()
+  );
+$$;
+
+-- Let clients see contractors assigned to their own projects regardless of
+-- how the assignment was made (proposal-request approval, or direct admin
+-- assignment on an admin-initiated project) — the prior policy only covered
+-- the proposal_requests-approval path.
+CREATE POLICY "Clients can view contractors on their own projects"
+ON public.contractor_projects
+FOR SELECT
+TO authenticated
+USING (public.is_project_client(project_id));
+
+-- Let clients read the name/email of contractors assigned to their own
+-- projects, regardless of how the assignment was made. SECURITY DEFINER
+-- again to avoid recursing into contractor_projects'/projects' own policies.
+CREATE OR REPLACE FUNCTION public.is_contractor_on_my_project(p_contractor_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.contractor_projects cp
+    JOIN public.projects p ON p.id = cp.project_id
+    WHERE cp.contractor_id = p_contractor_id
+      AND p.client_id = auth.uid()
+  );
+$$;
+
+CREATE POLICY "Clients can view contractor profiles on their projects"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (public.is_contractor_on_my_project(id));
 ```
 
 ---
@@ -223,6 +282,7 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 |---|---|---|
 | SELECT | Authenticated user | Own row only (`auth.uid() = id`) |
 | SELECT | Admin | All rows |
+| SELECT | Client | Profiles of contractors assigned to their own projects — two policies: an undocumented pre-existing one (scoped through `proposal_requests` approval, per Path A) plus an additive one using `public.is_contractor_on_my_project()`, added to also cover admin-initiated projects (see "Two Creation Paths" under `projects` above) |
 | INSERT | Server action only | Via `supabaseAdmin` in `createUser` — not client-initiated |
 | UPDATE | Authenticated user | Own row only |
 | UPDATE | Admin | Any row |
@@ -258,7 +318,7 @@ Policies will be defined when the table is created in #40. Planned: admin full a
 |---|---|---|
 | SELECT | Admin | All rows |
 | SELECT | Contractor | Own rows only |
-| SELECT | Client | Contractors assigned to their projects |
+| SELECT | Client | Contractors assigned to their projects — two policies: original (via `proposal_requests` approval) plus an additive one using `public.is_project_client()` (a `SECURITY DEFINER` helper, see "Two Creation Paths" above), added to also cover admin-initiated projects without recursing into the `projects` table's own contractor-visibility policy |
 | INSERT | Admin | Via server action only |
 
 ---
