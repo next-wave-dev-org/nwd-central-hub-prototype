@@ -13,6 +13,13 @@ const adminItems = [
     tag: 'PROPOSALS',
   },
   {
+    href: '/login/admin/projects/new',
+    label: 'Create Project',
+    description: 'Start a project directly, no client proposal required',
+    accent: 'var(--nwd-teal)',
+    tag: 'PROJECTS',
+  },
+  {
     href: '/login/admin/users',
     label: 'Manage Users',
     description: 'Create users and manage all clients and contractors',
