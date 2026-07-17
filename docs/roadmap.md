@@ -30,6 +30,9 @@ MVP is achieved when the **8-step acceptance test** in `docs/mvp.md` passes end-
 | #54 | Admin Proposal Review Page & Lifecycle Automation | ✅ Done |
 | #60 | Documentation Overhaul — Onboarding, Schema, Architecture | ✅ Done |
 | #78 | Logo Header Changes | ✅ Done |
+| #55 | Core Project Workspace Page (+ GitHub Project link) | ✅ Done (PR #79) |
+| #45 | Admin Dashboard: User Management Table | ✅ Done (PR #66) |
+| #40 | Contractor Workflow: Request & Join Proposals | ✅ Done (PR #63) |
 
 ---
 
@@ -42,9 +45,6 @@ These are required for the 8-step acceptance test to pass. None are optional.
 | Issue | Title | PR | Status |
 |-------|-------|----|--------|
 | #80 | Unify Headers to Missing Pages | #85 (open) | 🔄 In Progress |
-| #55 | Core Project Workspace Page (+ GitHub Project link) | #79 (open) | 🔄 In Progress |
-| #45 | Admin Dashboard: User Management Table | #66 (draft) | 🔄 In Progress |
-| #40 | Contractor Workflow: Request & Join Proposals | #63 (draft) | 🔄 In Progress |
 
 ### Not Started (MVP Blockers)
 
@@ -58,13 +58,13 @@ These are required for the 8-step acceptance test to pass. None are optional.
 
 Not required for the 8-step acceptance test, but necessary for Beta v1.0 quality.
 
-| Issue | Title | Status | Notes |
-|-------|-------|--------|-------|
-| #86 | Refactor: Extract NWD Header into Shared Component | 📋 Not Started | Unblocked after #80 merges |
-| #81 | User Settings & Logout — Header Dropdown | 📋 Not Started | Depends on #86 |
-| #82 | Profile and Settings Pages (`/profile`, `/settings`) | 📋 Not Started | Depends on #81 |
-| #83 | Redesign Landing/Login Page | 📋 Not Started | oAuth buttons as placeholders until #84 |
-| #84 | Set Up oAuth and Account Linking | ⏳ Deferred | Placeholders ship with #83; full impl post-MVP |
+| Issue | Title | PR | Status | Notes |
+|-------|-------|----|--------|-------|
+| #86 | Refactor: Extract NWD Header into Shared Component | — | 📋 Not Started | Unblocked after #80 merges |
+| #81 | User Settings & Logout — Header Dropdown | #88 (draft) | 🔄 In Progress | Depends on #86 |
+| #82 | Profile and Settings Pages (`/profile`, `/settings`) | #89 (draft) | 🔄 In Progress | Depends on #81 |
+| #83 | Redesign Landing/Login Page | #90 (draft) | 🔄 In Progress | oAuth buttons as placeholders until #84 |
+| #84 | Set Up oAuth and Account Linking | — | ⏳ Deferred | Placeholders ship with #83; full impl post-MVP |
 
 ---
 
@@ -84,7 +84,7 @@ Not required for the 8-step acceptance test, but necessary for Beta v1.0 quality
 
 ## Architecture: Hybrid Project Creation Flow — #87
 
-**Issue #87. Scope and plan before drafts #63/#66 resolve.** This change affects the project workspace data model and should be mapped before the workspace and contractor workflow PRs finalize.
+**Issue #87 — PR #91 (draft), 🔄 In Progress.** This change affects the project workspace data model. #63/#66/#79 (workspace and contractor workflow) have since merged, so this now builds on top of that shipped foundation rather than needing to be sequenced before it.
 
 ### Problem
 
@@ -198,4 +198,4 @@ All uploads stored in Supabase Storage with RLS scoped to project membership. Th
 
 ---
 
-*Last updated: 2026-07-06*
+*Last updated: 2026-07-17*
