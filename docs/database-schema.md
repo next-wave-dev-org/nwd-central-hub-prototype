@@ -87,27 +87,56 @@ draft → submitted → approved
 
 ## Table: `projects`
 
-Created automatically when an admin approves a proposal. The `approveProposal` server action in `app/login/admin/proposals/actions.ts` updates the proposal status to `approved` and inserts the projects row atomically.
+A project can be created one of two ways (see "Two Creation Paths" below):
+- Automatically, when an admin approves a proposal. The `approveProposal` server action in `app/login/admin/proposals/actions.ts` updates the proposal status to `approved` and inserts the projects row atomically.
+- Directly, when an admin uses "Create Project" without a prior proposal. The `createProjectDirect` server action in `app/login/admin/projects/new/actions.ts` inserts the row (and any contractor assignments) with no `proposals` row involved.
 
 ```sql
 id                  uuid       PRIMARY KEY DEFAULT gen_random_uuid()
-proposal_id         uuid       NOT NULL REFERENCES proposals(id)
-client_id           uuid       NOT NULL REFERENCES profiles(id)
+proposal_id         uuid       REFERENCES proposals(id)
+client_id           uuid       REFERENCES profiles(id)
 title               text
 description         text
 budget              text
 status              text       DEFAULT 'active'
 github_project_url  text
+origin              text       NOT NULL DEFAULT 'client' CHECK (origin IN ('client', 'admin'))
 created_at          timestamptz DEFAULT now()
 ```
 
 **Notes:**
-- `proposal_id` and `client_id` are copied from the source proposal at approval time.
-- `title`, `description`, and `budget` are copied from the source proposal at approval time.
-- Contractor linkage is handled via `contractor_projects` (see below), not a column on this table.
+- `proposal_id` and `client_id` are nullable — an admin-initiated project has no source proposal, and can be created with no client for fully internal work.
+- For client-initiated projects, `proposal_id`, `client_id`, `title`, `description`, and `budget` are copied from the source proposal at approval time.
+- Contractor linkage is handled via `contractor_projects` (see below), not a column on this table, regardless of origin.
 - `github_project_url` is optional; when set, a "View Project Board" link is shown in the workspace. Added in #55.
+- `origin` records which path created the row — `'client'` (default, proposal-approved) or `'admin'` (direct creation). Existing rows default to `'client'` since every project prior to this field's introduction came through the proposal flow.
 
-**Source of truth:** `app/login/admin/proposals/actions.ts`
+**Source of truth:** `app/login/admin/proposals/actions.ts`, `app/login/admin/projects/new/actions.ts`
+
+### Two Creation Paths
+
+```
+Path A — Client-initiated (unchanged):
+  Client submits proposal → admin reviews/approves → contractor requests → admin approves → project workspace
+
+Path B — Admin-initiated:
+  Admin creates project directly → assigns client (optional) → assigns contractor(s) (optional) → project workspace
+```
+
+Both paths produce an identical `projects` row and land in the same `/projects/[id]` workspace. `origin` is metadata for the admin UI (see the "Active Projects" badge) — it is not read by any RLS policy or access check. **Project membership remains the sole access gate**: a client sees a project because `client_id = auth.uid()`, a contractor because a `contractor_projects` row exists, regardless of how the project was created. No RLS policy changes were needed for Path B — every existing SELECT/INSERT policy on `projects` and `contractor_projects` already works identically whether `client_id`/`proposal_id` is null or populated, since the only INSERT path for both tables has always been an admin server action using `supabaseAdmin` (which bypasses RLS entirely).
+
+### Migration (apply by hand in the Supabase SQL editor)
+
+```sql
+-- Admin-initiated projects have no source proposal and may have no client yet
+ALTER TABLE public.projects ALTER COLUMN proposal_id DROP NOT NULL;
+ALTER TABLE public.projects ALTER COLUMN client_id DROP NOT NULL;
+
+-- Track which path created the project
+ALTER TABLE public.projects
+  ADD COLUMN origin text NOT NULL DEFAULT 'client'
+  CHECK (origin IN ('client', 'admin'));
+```
 
 ---
 
@@ -216,7 +245,7 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 | SELECT | Client | Own projects only (`client_id = auth.uid()`) |
 | SELECT | Admin | All projects |
 | SELECT | Contractor | Projects where assigned (via `contractor_projects`) |
-| INSERT | Admin | Via `supabaseAdmin` in `approveProposal` server action only |
+| INSERT | Admin | Via `supabaseAdmin`, in either the `approveProposal` or `createProjectDirect` server action |
 | UPDATE | Admin | Any project |
 
 ### `proposal_requests` (not yet built)
