@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 import { supabase } from '@/lib/supabase'
 
 type ContractorProject = {
@@ -89,6 +90,7 @@ function ProjectWorkspaceContent() {
             </svg>
             Back
           </button>
+          <UserMenu />
         </div>
       </header>
 

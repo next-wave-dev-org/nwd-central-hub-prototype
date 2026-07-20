@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
-import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 
@@ -25,7 +25,7 @@ type ContractorProjectRow = {
   contractor: Contractor | Contractor[] | null
 }
 
-export default function ClientProjectsPage() {
+function ClientProjectsContent() {
   const { profile } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,66 +85,143 @@ export default function ClientProjectsPage() {
   }, [profile])
 
   return (
-    <RouteGuard allowedRoles={['client']}>
-      <Navbar />
+    <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <main className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-8">
-          Client Active Projects
-        </h1>
-
-        {error && (
-          <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
-            <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
+      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Image
+            src="/NextWaveDev_FINAL_small.png"
+            alt="NextWaveDev logo"
+            width={36}
+            height={36}
+            className="object-contain"
+          />
+          <div className="flex items-center flex-1 min-w-0">
+            <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
+              NextWaveDev
+            </span>
+            <span className="text-gray-400 mx-2 select-none">/</span>
+            <Link href="/login/client" className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors">
+              Client Dashboard
+            </Link>
+            <span className="text-gray-400 mx-2 select-none">/</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--nwd-teal)' }}>Active Projects</span>
           </div>
-        )}
+          <Link
+            href="/login/client"
+            className="text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 flex-shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 3L5 8l5 5" />
+            </svg>
+            Back
+          </Link>
+        </div>
+      </header>
 
-        {loading && (
-          <p className="text-gray-500">Loading projects...</p>
-        )}
+      <main className="flex-1 px-6 py-10">
+        <div className="max-w-5xl mx-auto">
 
-        {!loading && projects.length === 0 && (
-          <div className="p-6 border rounded-lg">
-            <p>No active projects found.</p>
+          <div className="mb-8">
+            <p
+              className="text-xs font-semibold tracking-widest mb-2"
+              style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}
+            >
+              CLIENT
+            </p>
+            <div className="flex items-end justify-between gap-4">
+              <h1 className="text-3xl font-bold text-gray-900 leading-tight">Active Projects</h1>
+              {!loading && (
+                <span
+                  className="text-xs font-semibold tracking-wider px-3 py-1.5 rounded-lg"
+                  style={{
+                    color: projects.length > 0 ? 'var(--nwd-teal)' : '#6b7280',
+                    background: projects.length > 0
+                      ? 'color-mix(in srgb, var(--nwd-teal) 12%, transparent)'
+                      : 'color-mix(in srgb, #6b7280 10%, transparent)',
+                    fontFamily: 'var(--font-geist-mono)',
+                  }}
+                >
+                  {projects.length} project{projects.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
           </div>
-        )}
 
-        {!loading && projects.length > 0 && (
-          <div className="grid gap-4">
-            {projects.map((project) => (
-              <Link
-                key={project.id}
-                href={`/login/projects/${project.id}`}
-                className="block p-6 border rounded-lg shadow hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer"
-              >
-                <h2 className="text-lg font-bold mb-2">
-                  {project.title}
-                </h2>
+          {error && (
+            <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
+            </div>
+          )}
 
-                <p className="text-gray-600">
-                  {project.description}
-                </p>
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <div className="w-9 h-9 rounded-full border-[3px] border-gray-200 border-t-gray-600 animate-spin" />
+              <p className="text-sm text-stone-400">Loading projects…</p>
+            </div>
+          )}
 
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs font-semibold text-gray-400 tracking-wide mb-2">TEAM</p>
-                  {project.contractors.length === 0 ? (
-                    <p className="text-sm text-gray-400">No contractors assigned yet.</p>
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {project.contractors.map((c) => (
-                        <li key={c.id} className="text-sm text-gray-700">
-                          {c.name || c.email}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+          {!loading && projects.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+              <p className="text-lg font-bold text-stone-800">No active projects</p>
+              <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
+                You have no active projects yet.
+              </p>
+            </div>
+          )}
+
+          {!loading && projects.length > 0 && (
+            <div className="grid gap-4">
+              {projects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/login/projects/${project.id}`}
+                  className="block p-6 border rounded-lg shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer"
+                  style={{ borderColor: 'var(--nwd-border)' }}
+                >
+                  <h2 className="text-lg font-bold text-gray-900 mb-1">{project.title}</h2>
+                  <p className="text-sm text-gray-500">{project.description}</p>
+
+                  <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--nwd-border)' }}>
+                    <p className="text-xs font-semibold text-gray-400 tracking-wide mb-2">TEAM</p>
+                    {project.contractors.length === 0 ? (
+                      <p className="text-sm text-gray-400">No contractors assigned yet.</p>
+                    ) : (
+                      <ul className="flex flex-col gap-1">
+                        {project.contractors.map((c) => (
+                          <li key={c.id} className="text-sm text-gray-700">
+                            {c.name || c.email}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+        </div>
       </main>
+
+      <footer className="text-center py-6 px-4">
+        <p
+          className="text-xs tracking-wide"
+          style={{ color: 'var(--nwd-purple)', opacity: 0.4, fontFamily: 'var(--font-geist-mono)' }}
+        >
+          NWD CENTRAL HUB
+        </p>
+      </footer>
+
+    </div>
+  )
+}
+
+export default function ClientProjectsPage() {
+  return (
+    <RouteGuard allowedRoles={['client']}>
+      <ClientProjectsContent />
     </RouteGuard>
   )
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 import { supabase } from '@/lib/supabase'
 import {
     type Proposal,
@@ -184,6 +185,7 @@ function ProposalReviewContent() {
                         </svg>
                         Back
                     </Link>
+                    <UserMenu />
                 </div>
             </header>
 

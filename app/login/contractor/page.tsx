@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 
@@ -58,7 +58,6 @@ function ActiveStatusBadge() {
 
 function ContractorContent() {
   const { profile } = useAuth()
-  const router = useRouter()
   const [activeProjects, setActiveProjects] = useState<Project[]>([])
   const [availableProjects, setAvailableProjects] = useState<Project[]>([])
   const [requestMap, setRequestMap] = useState<RequestMap>({})
@@ -130,11 +129,6 @@ function ContractorContent() {
     setRequesting(null)
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
@@ -158,20 +152,7 @@ function ContractorContent() {
           </div>
 
           <div className="flex items-center gap-3">
-            <a
-              href="https://clockify.me"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
-            >
-              Log Hours
-            </a>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
-            >
-              Sign out
-            </button>
+            <UserMenu />
           </div>
         </div>
       </header>
@@ -187,6 +168,17 @@ function ContractorContent() {
 
         {/* ── Active Projects ── */}
         <section>
+          <div className="flex justify-end mb-4">
+            <a
+              href="https://clockify.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+            >
+              Log Hours
+            </a>
+          </div>
+
           <div className="flex items-end justify-between mb-2">
             <div>
               <p

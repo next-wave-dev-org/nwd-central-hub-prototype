@@ -11,9 +11,9 @@ There is no self-registration. All accounts are created by an admin.
 ### Creating a user via the admin UI
 
 1. Log in as an admin
-2. Navigate to `/login/admin/users/create`
-3. Fill in name, email, and role
-4. Submit — the server action generates a 15-character temporary password, creates the `auth.users` row, inserts the `profiles` row atomically, and sends an onboarding email via Resend
+2. Navigate to `/login/admin/users`
+3. Use the inline "Create User" form on that page (there is no separate `/create` route as of PR #66 — it's a form on the same table view)
+4. Fill in name, email, and role, then submit — the server action (`create/actions.ts`) generates a 15-character temporary password, creates the `auth.users` row, inserts the `profiles` row atomically, and sends an onboarding email via Resend
 5. The temporary password is displayed on screen immediately as a fallback if email does not arrive
 
 The user will be forced to change their password on first login. `RouteGuard` detects `is_temporary_password: true` in the `profiles` row and redirects to `/change-password` before allowing access to any protected page.
@@ -42,7 +42,7 @@ Available roles: `admin`, `client`, `contractor`. Role controls dashboard routin
 
 ## 2. Database Schema
 
-The deployed schema as of PR #54. `docs/database-schema.md` is the detailed reference including RLS policies and relationship diagrams. This section is the quick-reference version.
+The deployed schema, updated through PR #79 (Core Project Workspace). `docs/database-schema.md` is the detailed reference including RLS policies and relationship diagrams. This section is the quick-reference version.
 
 ### `profiles`
 
@@ -56,8 +56,6 @@ role                  text         CHECK (role IN ('admin', 'client', 'contracto
 is_temporary_password boolean
 created_at            timestamp    DEFAULT now()
 ```
-
-> `name` is set at creation but is not yet in the `UserProfile` TypeScript type. Add `name?: string` to `types/auth.ts` before implementing any feature that displays user names (workspace, messaging).
 
 ### `proposals`
 
@@ -80,21 +78,22 @@ Status lifecycle: `draft` → `submitted` → `approved` | `rejected`. Approved 
 Created automatically when an admin approves a proposal via `approveProposal()` in `app/login/admin/proposals/actions.ts`.
 
 ```sql
-id            uuid       PRIMARY KEY DEFAULT gen_random_uuid()
-proposal_id   uuid       NOT NULL REFERENCES proposals(id)
-client_id     uuid       NOT NULL REFERENCES profiles(id)
-title         text
-description   text
-budget        text
-status        text       DEFAULT 'active'
-created_at    timestamptz DEFAULT now()
+id                  uuid       PRIMARY KEY DEFAULT gen_random_uuid()
+proposal_id         uuid       NOT NULL REFERENCES proposals(id)
+client_id           uuid       NOT NULL REFERENCES profiles(id)
+title               text
+description         text
+budget              text
+status              text       DEFAULT 'active'
+github_project_url  text
+created_at          timestamptz DEFAULT now()
 ```
 
-Contractor linkage is handled via `contractor_projects` (see below). The workspace page (`/projects/[id]`) is pending #55.
+Contractor linkage is handled via `contractor_projects` (see below). The shared workspace page lives at `/login/projects/[id]` (shipped in #55); `github_project_url` is optional and shows a "View Project Board" link when set.
 
 ### `proposal_requests`
 
-Contractor self-service request-to-join flow. Pending #40.
+Contractor self-service request-to-join flow, shipped in #40. Admin approval (`/login/admin/requests`) sets `status: 'approved'` and inserts the matching `contractor_projects` row.
 
 ```sql
 id              uuid       PRIMARY KEY DEFAULT gen_random_uuid()
@@ -156,12 +155,12 @@ export type UserRole = 'admin' | 'contractor' | 'client'
 export type UserProfile = {
   id: string
   email: string
+  name?: string
   role: UserRole
   is_temporary_password?: boolean
+  created_at?: string
 }
 ```
-
-> `name` is missing from `UserProfile`. The `profiles` table has a `name` column and `AuthProvider` does not select it. Before implementing #55 or #56, add `name?: string` to `UserProfile` and add `name` to the `select` call in `AuthProvider.tsx`.
 
 ---
 
@@ -219,14 +218,18 @@ profiles!client_id ( name, email )
 
 ## 8. Current Build State
 
-### What is working end-to-end (as of PR #54)
+### What is working end-to-end (as of PR #79)
 
-- Admin creates users via `/login/admin/users/create` -- email invite + temp password flow complete
+- Admin creates users via the inline form on `/login/admin/users` -- email invite + temp password flow complete
 - Client logs in, submits a proposal via `/login/proposals/new` -- writes to Supabase
 - Client views their own submitted proposals via `/login/proposals`
 - Admin reviews submitted proposals via `/login/admin/proposals` -- fetches from Supabase with client name/email join
 - Admin approves a proposal -- status set to `approved`, `projects` row created automatically
 - Admin rejects a proposal -- status set to `rejected`, removed from review queue
+- Contractors browse available projects and request to join; admin approves/rejects via `/login/admin/requests`, which inserts the `contractor_projects` row
+- Client, contractor, and admin each have an Active Projects list, and every project links to a shared workspace page at `/login/projects/[id]`
+
+For anything not listed here, `docs/roadmap.md` is the current source of truth -- this list is a snapshot, not maintained line-by-line on every PR.
 
 
 ## 9. Environment Setup
@@ -256,8 +259,8 @@ See `docs/onboarding.md` for the full setup walkthrough including Supabase acces
 - When adding a protected route, update both `proxy.ts` (`ROLE_ROUTES` or `AUTHENTICATED_PREFIXES`) and wrap the page with `RouteGuard`. One layer without the other is incomplete.
 - The `is_temporary_password` flag drives the forced password change flow. Any action that creates or resets a password must set this flag correctly in `profiles`.
 - `contractor_projects` and `proposal_requests` have RLS enabled with policies applied. All new tables should follow the same pattern -- RLS on at creation, policies applied in the same migration, never left with zero policies.
-- Do not build features that hard-depend on the current `projects` schema without coordinating with the team first. The schema will extend as #55 and #56 land.
+- #55 has landed (workspace page, `github_project_url`). #56 (project thread messaging) is still pending and will likely add a `project_messages` table (see schema above) -- coordinate before hard-depending on the current `projects`/messaging schema.
 
 ---
 
-*Last updated: [Update on commit]*
+*Last updated: 2026-07-17*

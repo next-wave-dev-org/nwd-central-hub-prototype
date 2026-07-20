@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
-import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
 
 type Project = {
@@ -31,7 +31,7 @@ function OriginBadge({ origin }: { origin: 'client' | 'admin' }) {
   )
 }
 
-export default function AdminProjectsPage() {
+function AdminProjectsContent() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -53,47 +53,124 @@ export default function AdminProjectsPage() {
   }, [])
 
   return (
-    <RouteGuard allowedRoles={['admin']}>
-      <Navbar />
+    <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <main className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-8">
-          Admin Active Projects
-        </h1>
-
-        {loading && (
-          <p className="text-gray-500">Loading projects...</p>
-        )}
-
-        {!loading && projects.length === 0 && (
-          <div className="p-6 border rounded-lg">
-            <p>No active projects found.</p>
+      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Image
+            src="/NextWaveDev_FINAL_small.png"
+            alt="NextWaveDev logo"
+            width={36}
+            height={36}
+            className="object-contain"
+          />
+          <div className="flex items-center flex-1 min-w-0">
+            <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
+              NextWaveDev
+            </span>
+            <span className="text-gray-400 mx-2 select-none">/</span>
+            <Link href="/login/admin" className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors">
+              Admin Dashboard
+            </Link>
+            <span className="text-gray-400 mx-2 select-none">/</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--nwd-teal)' }}>Active Projects</span>
           </div>
-        )}
+          <Link
+            href="/login/admin"
+            className="text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 flex-shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 3L5 8l5 5" />
+            </svg>
+            Back
+          </Link>
+        </div>
+      </header>
 
-        {!loading && projects.length > 0 && (
-          <div className="grid gap-4">
-            {projects.map((project) => (
-              <Link
-                key={project.id}
-                href={`/login/projects/${project.id}`}
-                className="block p-6 border rounded-lg shadow hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold">
-                    {project.title}
-                  </h2>
-                  <OriginBadge origin={project.origin} />
-                </div>
+      <main className="flex-1 px-6 py-10">
+        <div className="max-w-5xl mx-auto">
 
-                <p className="text-gray-600">
-                  {project.description}
-                </p>
-              </Link>
-            ))}
+          <div className="mb-8">
+            <p
+              className="text-xs font-semibold tracking-widest mb-2"
+              style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}
+            >
+              ADMIN
+            </p>
+            <div className="flex items-end justify-between gap-4">
+              <h1 className="text-3xl font-bold text-gray-900 leading-tight">Active Projects</h1>
+              {!loading && (
+                <span
+                  className="text-xs font-semibold tracking-wider px-3 py-1.5 rounded-lg"
+                  style={{
+                    color: projects.length > 0 ? 'var(--nwd-teal)' : '#6b7280',
+                    background: projects.length > 0
+                      ? 'color-mix(in srgb, var(--nwd-teal) 12%, transparent)'
+                      : 'color-mix(in srgb, #6b7280 10%, transparent)',
+                    fontFamily: 'var(--font-geist-mono)',
+                  }}
+                >
+                  {projects.length} project{projects.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
           </div>
-        )}
+
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <div className="w-9 h-9 rounded-full border-[3px] border-gray-200 border-t-gray-600 animate-spin" />
+              <p className="text-sm text-stone-400">Loading projects…</p>
+            </div>
+          )}
+
+          {!loading && projects.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+              <p className="text-lg font-bold text-stone-800">No active projects</p>
+              <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
+                No projects are currently active.
+              </p>
+            </div>
+          )}
+
+          {!loading && projects.length > 0 && (
+            <div className="grid gap-4">
+              {projects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/login/projects/${project.id}`}
+                  className="block p-6 border rounded-lg shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer"
+                  style={{ borderColor: 'var(--nwd-border)' }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-lg font-bold text-gray-900">{project.title}</h2>
+                    <OriginBadge origin={project.origin} />
+                  </div>
+                  <p className="text-sm text-gray-500">{project.description}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+
+        </div>
       </main>
+
+      <footer className="text-center py-6 px-4">
+        <p
+          className="text-xs tracking-wide"
+          style={{ color: 'var(--nwd-purple)', opacity: 0.4, fontFamily: 'var(--font-geist-mono)' }}
+        >
+          NWD CENTRAL HUB
+        </p>
+      </footer>
+
+    </div>
+  )
+}
+
+export default function AdminProjectsPage() {
+  return (
+    <RouteGuard allowedRoles={['admin']}>
+      <AdminProjectsContent />
     </RouteGuard>
   )
 }
