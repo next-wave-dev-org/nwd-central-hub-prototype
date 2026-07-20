@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 
 const clientItems = [
   {
@@ -41,18 +42,14 @@ function ClientDashboardContent() {
             height={36}
             className="object-contain"
           />
-          <div>
-            <span
-              className="font-semibold text-base tracking-tight"
-              style={{ color: 'var(--nwd-purple)' }}
-            >
+          <div className="flex items-center flex-1 min-w-0">
+            <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
               NextWaveDev
             </span>
             <span className="text-gray-400 mx-2 select-none">/</span>
-            <span className="text-sm text-gray-500 font-medium">
-              Client Dashboard
-            </span>
+            <span className="text-sm text-gray-500 font-medium">Client Dashboard</span>
           </div>
+          <UserMenu />
         </div>
       </header>
 
@@ -62,10 +59,7 @@ function ClientDashboardContent() {
           <div className="mb-10">
             <p
               className="text-xs font-semibold tracking-widest mb-2"
-              style={{
-                color: 'var(--nwd-teal)',
-                fontFamily: 'var(--font-geist-mono)',
-              }}
+              style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}
             >
               CLIENT
             </p>
@@ -82,10 +76,7 @@ function ClientDashboardContent() {
                 className="group flex items-center gap-5 rounded-lg px-5 py-4 border transition-colors hover:brightness-95"
                 style={{ borderColor: item.accent, background: 'white' }}
               >
-                <div
-                  className="w-1 self-stretch rounded-full flex-shrink-0"
-                  style={{ background: item.accent }}
-                />
+                <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: item.accent }} />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
@@ -106,10 +97,7 @@ function ClientDashboardContent() {
 
                 <svg
                   className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors flex-shrink-0"
-                  fill="none"
-                  viewBox="0 0 16 16"
-                  stroke="currentColor"
-                  strokeWidth="2"
+                  fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 8h10M9 4l4 4-4 4" />
                 </svg>
