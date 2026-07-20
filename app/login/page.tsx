@@ -21,6 +21,24 @@ function GithubIcon() {
   )
 }
 
+function MailIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M2 6l10 7 10-7" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="10" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
 function EyeIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -166,17 +184,22 @@ export default function LoginPage() {
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                   Email
                 </label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 block w-full rounded-md border px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2"
-                  style={{ borderColor: 'var(--nwd-border)' }}
-                />
+                <div className="relative mt-1">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                    <MailIcon />
+                  </span>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full rounded-md border pl-10 pr-3 py-2 text-sm text-gray-900 outline-none focus:ring-2"
+                    style={{ borderColor: 'var(--nwd-border)' }}
+                  />
+                </div>
               </div>
 
               <div>
@@ -184,6 +207,9 @@ export default function LoginPage() {
                   Password
                 </label>
                 <div className="relative mt-1">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                    <LockIcon />
+                  </span>
                   <input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
@@ -192,7 +218,7 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full rounded-md border px-3 py-2 pr-10 text-sm text-gray-900 outline-none focus:ring-2"
+                    className="block w-full rounded-md border pl-10 pr-10 py-2 text-sm text-gray-900 outline-none focus:ring-2"
                     style={{ borderColor: 'var(--nwd-border)' }}
                   />
                   <button
@@ -212,32 +238,44 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-colors cursor-pointer hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: 'var(--nwd-purple)' }}
-                >
-                  {loading ? 'Signing in…' : 'Sign In'}
-                </button>
-
-                {SOCIAL_PROVIDERS.map(({ name, Icon }) => (
-                  <button
-                    key={name}
-                    type="button"
-                    disabled
-                    title={`Sign in with ${name} — coming soon`}
-                    aria-label={`Sign in with ${name} (coming soon)`}
-                    className="flex-shrink-0 flex items-center justify-center w-11 h-[42px] rounded-lg border text-gray-400 cursor-not-allowed opacity-60"
-                    style={{ borderColor: 'var(--nwd-border)' }}
-                  >
-                    <Icon />
-                  </button>
-                ))}
-              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-colors cursor-pointer hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: 'var(--nwd-purple)' }}
+              >
+                {loading ? 'Signing in…' : 'Sign In'}
+              </button>
             </form>
 
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-6">
+              <div className="h-px flex-1" style={{ background: 'var(--nwd-border)' }} />
+              <span
+                className="text-xs text-gray-400 uppercase tracking-wider"
+                style={{ fontFamily: 'var(--font-geist-mono)' }}
+              >
+                Or continue with
+              </span>
+              <div className="h-px flex-1" style={{ background: 'var(--nwd-border)' }} />
+            </div>
+
+            {/* Social sign-in placeholders */}
+            <div className="grid grid-cols-3 gap-3">
+              {SOCIAL_PROVIDERS.map(({ name, Icon }) => (
+                <button
+                  key={name}
+                  type="button"
+                  disabled
+                  title={`Sign in with ${name} — coming soon`}
+                  aria-label={`Sign in with ${name} (coming soon)`}
+                  className="flex items-center justify-center rounded-md border py-2.5 text-gray-400 cursor-not-allowed opacity-60"
+                  style={{ borderColor: 'var(--nwd-border)' }}
+                >
+                  <Icon />
+                </button>
+              ))}
+            </div>
             <p className="text-xs text-gray-400 text-center mt-3">
               Social sign-in is coming soon.
             </p>
