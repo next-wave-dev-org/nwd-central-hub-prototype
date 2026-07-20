@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { type Proposal } from '@/lib/proposals'
@@ -86,6 +87,7 @@ function SubmissionsContent() {
                         </svg>
                         Back
                     </Link>
+                    <UserMenu />
                 </div>
             </header>
 

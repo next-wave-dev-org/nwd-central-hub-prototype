@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import UserMenu from '@/components/UserMenu'
 import { supabase } from '@/lib/supabase'
 
 type RequestRow = {
@@ -133,6 +134,7 @@ function AdminRequestsContent() {
             </svg>
             Back
           </Link>
+          <UserMenu />
         </div>
       </header>
 
