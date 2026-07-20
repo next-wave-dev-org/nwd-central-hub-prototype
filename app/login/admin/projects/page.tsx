@@ -10,6 +10,25 @@ type Project = {
   id: string
   title: string
   description: string
+  origin: 'client' | 'admin'
+}
+
+function OriginBadge({ origin }: { origin: 'client' | 'admin' }) {
+  const isAdmin = origin === 'admin'
+  return (
+    <span
+      className="text-xs font-semibold tracking-wider px-2 py-0.5 rounded"
+      style={{
+        color: isAdmin ? 'var(--nwd-teal)' : 'var(--nwd-purple)',
+        background: isAdmin
+          ? 'color-mix(in srgb, var(--nwd-teal) 12%, transparent)'
+          : 'color-mix(in srgb, var(--nwd-purple) 12%, transparent)',
+        fontFamily: 'var(--font-geist-mono)',
+      }}
+    >
+      {isAdmin ? 'ADMIN-CREATED' : 'CLIENT PROPOSAL'}
+    </span>
+  )
 }
 
 function AdminProjectsContent() {
@@ -20,7 +39,7 @@ function AdminProjectsContent() {
     const fetchProjects = async () => {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, title, description')
+        .select('id, title, description, origin')
         .eq('status', 'active')
 
       if (!error) {
@@ -122,7 +141,10 @@ function AdminProjectsContent() {
                   className="block p-6 border rounded-lg shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer"
                   style={{ borderColor: 'var(--nwd-border)' }}
                 >
-                  <h2 className="text-lg font-bold text-gray-900 mb-1">{project.title}</h2>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-lg font-bold text-gray-900">{project.title}</h2>
+                    <OriginBadge origin={project.origin} />
+                  </div>
                   <p className="text-sm text-gray-500">{project.description}</p>
                 </Link>
               ))}

@@ -7,11 +7,11 @@ import UserMenu from '@/components/UserMenu'
 
 const adminItems = [
   {
-    href: '/login/admin/proposals',
-    label: 'Proposal Review',
-    description: 'Review submitted proposals and approve or reject them',
-    accent: 'var(--nwd-purple)',
-    tag: 'PROPOSALS',
+    href: '/login/admin/projects/new',
+    label: 'Create Project',
+    description: 'Start a project directly, no client proposal required',
+    accent: 'var(--nwd-teal)',
+    tag: 'PROJECTS',
   },
   {
     href: '/login/admin/users',
@@ -19,6 +19,13 @@ const adminItems = [
     description: 'Create users and manage all clients and contractors',
     accent: 'var(--nwd-teal)',
     tag: 'USERS',
+  },
+  {
+    href: '/login/admin/proposals',
+    label: 'Proposal Review',
+    description: 'Review submitted proposals and approve or reject them',
+    accent: 'var(--nwd-purple)',
+    tag: 'PROPOSALS',
   },
   {
     href: '/login/admin/requests',
