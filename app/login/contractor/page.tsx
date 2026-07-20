@@ -168,6 +168,17 @@ function ContractorContent() {
 
         {/* ── Active Projects ── */}
         <section>
+          <div className="flex justify-end mb-4">
+            <a
+              href="https://clockify.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+            >
+              Log Hours
+            </a>
+          </div>
+
           <div className="flex items-end justify-between mb-2">
             <div>
               <p
@@ -178,21 +189,11 @@ function ContractorContent() {
               </p>
               <h1 className="text-3xl font-bold text-gray-900 leading-tight">Active Projects</h1>
             </div>
-            <div className="flex items-center gap-3 mb-1">
-              <a
-                href="https://clockify.me"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
-              >
-                Log Hours
-              </a>
-              {!loading && (
-                <span className="text-xs font-semibold px-4 py-1.5 rounded-full bg-gray-100 text-gray-600">
-                  {activeProjects.length} project{activeProjects.length !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
+            {!loading && (
+              <span className="mb-1 text-xs font-semibold px-4 py-1.5 rounded-full bg-gray-100 text-gray-600">
+                {activeProjects.length} project{activeProjects.length !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
 
           <div className="h-0.5 bg-gradient-to-r from-gray-200 to-transparent rounded-full mt-4 mb-10" />
