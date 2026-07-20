@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 
@@ -18,6 +17,24 @@ function GithubIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.333-1.754-1.333-1.754-1.089-.744.084-.729.084-.729 1.205.084 1.838 1.237 1.838 1.237 1.07 1.834 2.809 1.304 3.495.997.108-.775.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+    </svg>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-3.22 4.39M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+      <path d="M1 1l22 22" />
     </svg>
   )
 }
@@ -41,6 +58,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -118,12 +136,6 @@ export default function LoginPage() {
               Sign In
             </span>
           </div>
-          <Link href="/" className="text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 flex-shrink-0">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 3L5 8l5 5" />
-            </svg>
-            Back
-          </Link>
         </div>
       </header>
 
@@ -171,17 +183,27 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Password
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 block w-full rounded-md border px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2"
-                  style={{ borderColor: 'var(--nwd-border)' }}
-                />
+                <div className="relative mt-1">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full rounded-md border px-3 py-2 pr-10 text-sm text-gray-900 outline-none focus:ring-2"
+                    style={{ borderColor: 'var(--nwd-border)' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
               </div>
 
               {message && (
@@ -190,44 +212,32 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-colors cursor-pointer hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: 'var(--nwd-purple)' }}
-              >
-                {loading ? 'Signing in…' : 'Sign In'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-colors cursor-pointer hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: 'var(--nwd-purple)' }}
+                >
+                  {loading ? 'Signing in…' : 'Sign In'}
+                </button>
+
+                {SOCIAL_PROVIDERS.map(({ name, Icon }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    disabled
+                    title={`Sign in with ${name} — coming soon`}
+                    aria-label={`Sign in with ${name} (coming soon)`}
+                    className="flex-shrink-0 flex items-center justify-center w-11 h-[42px] rounded-lg border text-gray-400 cursor-not-allowed opacity-60"
+                    style={{ borderColor: 'var(--nwd-border)' }}
+                  >
+                    <Icon />
+                  </button>
+                ))}
+              </div>
             </form>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3 my-6">
-              <div className="h-px flex-1" style={{ background: 'var(--nwd-border)' }} />
-              <span
-                className="text-xs text-gray-400 uppercase tracking-wider"
-                style={{ fontFamily: 'var(--font-geist-mono)' }}
-              >
-                Or continue with
-              </span>
-              <div className="h-px flex-1" style={{ background: 'var(--nwd-border)' }} />
-            </div>
-
-            {/* Social sign-in placeholders */}
-            <div className="grid grid-cols-3 gap-3">
-              {SOCIAL_PROVIDERS.map(({ name, Icon }) => (
-                <button
-                  key={name}
-                  type="button"
-                  disabled
-                  title={`Sign in with ${name} — coming soon`}
-                  aria-label={`Sign in with ${name} (coming soon)`}
-                  className="flex items-center justify-center rounded-md border py-2.5 text-gray-400 cursor-not-allowed opacity-60"
-                  style={{ borderColor: 'var(--nwd-border)' }}
-                >
-                  <Icon />
-                </button>
-              ))}
-            </div>
             <p className="text-xs text-gray-400 text-center mt-3">
               Social sign-in is coming soon.
             </p>
