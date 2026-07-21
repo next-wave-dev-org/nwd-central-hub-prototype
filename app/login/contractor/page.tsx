@@ -1,10 +1,9 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
-import UserMenu from '@/components/UserMenu'
+import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 
@@ -132,30 +131,7 @@ function ContractorContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/NextWaveDev_FINAL_small.png"
-              alt="NextWaveDev logo"
-              width={36}
-              height={36}
-              className="object-contain"
-            />
-            <div>
-              <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
-                NextWaveDev
-              </span>
-              <span className="text-gray-400 mx-2 select-none">/</span>
-              <span className="text-sm text-gray-500 font-medium">Contractor Dashboard</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <UserMenu />
-          </div>
-        </div>
-      </header>
+      <Navbar breadcrumbs={[{ label: 'Contractor Dashboard' }]} />
 
       <main className="max-w-5xl mx-auto px-6 py-14 w-full flex flex-col gap-16">
 

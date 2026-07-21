@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import RouteGuard from '@/components/RouteGuard'
+import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
 
 type Project = {
@@ -55,37 +55,12 @@ function AdminProjectsContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Image
-            src="/NextWaveDev_FINAL_small.png"
-            alt="NextWaveDev logo"
-            width={36}
-            height={36}
-            className="object-contain"
-          />
-          <div className="flex items-center flex-1 min-w-0">
-            <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
-              NextWaveDev
-            </span>
-            <span className="text-gray-400 mx-2 select-none">/</span>
-            <Link href="/login/admin" className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors">
-              Admin Dashboard
-            </Link>
-            <span className="text-gray-400 mx-2 select-none">/</span>
-            <span className="text-sm font-medium" style={{ color: 'var(--nwd-teal)' }}>Active Projects</span>
-          </div>
-          <Link
-            href="/login/admin"
-            className="text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 flex-shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 3L5 8l5 5" />
-            </svg>
-            Back
-          </Link>
-        </div>
-      </header>
+      <Navbar
+        breadcrumbs={[
+          { label: 'Admin Dashboard', href: '/login/admin' },
+          { label: 'Active Projects' },
+        ]}
+      />
 
       <main className="flex-1 px-6 py-10">
         <div className="max-w-5xl mx-auto">
