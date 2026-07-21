@@ -47,7 +47,7 @@ jobs:
                 reopened) desired="In Progress" ;;
               esac
               ;;
-            pull_request)
+            pull_request_target)
               case "$ACTION" in
                 opened)
                   if [ "$IS_DRAFT" = "true" ]; then
