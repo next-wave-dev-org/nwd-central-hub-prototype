@@ -37,7 +37,8 @@ nwd-central-hub-prototype/
 ├── components/
 │   ├── AuthProvider.tsx  # Global client-side auth context
 │   ├── RouteGuard.tsx    # Client-side role enforcement for page components
-│   ├── Navbar.tsx        # Global navigation
+│   ├── Navbar.tsx        # Shared page header — logo, breadcrumbs, UserMenu (used on all pages)
+│   ├── UserMenu.tsx      # Header user dropdown — name, Profile/Settings/Logout
 │   └── BackButton.tsx    # Shared back navigation component
 ├── lib/
 │   ├── supabase.ts       # Browser Supabase client (anon key)
