@@ -1,75 +1,90 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from './AuthProvider'
-import UserMenu from './UserMenu'
-import { useEffect, useState } from "react"
+import Image from 'next/image'
+import Link from 'next/link'
+import UserMenu from '@/components/UserMenu'
 
-export default function Navbar() {
-  const { profile } = useAuth()
-  const router = useRouter()
+export type NavbarBreadcrumb = {
+  label: string
+  href?: string
+}
 
-  const [role, setRole] = useState(null)
+type NavbarProps = {
+  breadcrumbs: NavbarBreadcrumb[]
+  onBack?: () => void
+}
 
-  useEffect(() => {
-    const fetchRole = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      setRole(profile?.role || null)
-    }
-
-    fetchRole()
-  }, [router])
-
+export default function Navbar({ breadcrumbs, onBack }: NavbarProps) {
   return (
-    <div style={{ padding: 20, borderBottom: '1px solid gray' }} className="flex items-center justify-between">
-      <div>
-        {profile?.role === 'admin' && (
-          <>
-            <span>Admin Panel | </span>
+    <header className="bg-white">
+      {/* The divider lives on the centered container (not the full-bleed
+          <header>) so it reads as a contained divider aligned to the content
+          column — this sidesteps the reserved scrollbar gutter entirely, which
+          page content can't paint into. scrollbar-gutter: stable (globals.css)
+          keeps this centered line from shifting between scrolling and
+          non-scrolling pages. */}
+      <div className="w-[90%] mx-auto border-b" style={{ borderColor: 'var(--nwd-border)' }}>
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Image
+              src="/NextWaveDev_FINAL_small.png"
+              alt="NextWaveDev logo"
+              width={36}
+              height={36}
+              className="object-contain flex-shrink-0"
+            />
+            <div className="flex items-center min-w-0">
+              <span
+                className="hidden sm:inline font-semibold text-base tracking-tight flex-shrink-0"
+                style={{ color: 'var(--nwd-purple)' }}
+              >
+                NextWaveDev
+              </span>
+              {breadcrumbs.map((crumb, i) => {
+                const isLast = i === breadcrumbs.length - 1
+                const isBackTarget = !isLast && i === breadcrumbs.length - 2 && !crumb.href && !!onBack
 
-            <button onClick={() => router.push('/login/admin')}>
-              Approve Projects
-            </button>
-          </>
-        )}
+                return (
+                  <span
+                    key={i}
+                    className={`items-center ${isLast ? 'flex min-w-0' : 'hidden sm:flex flex-shrink-0'}`}
+                  >
+                    {/* On mobile only the current (last) crumb shows; its
+                        separator stays so it reads "logo / Current Page". */}
+                    <span className="text-gray-400 mx-2 select-none flex-shrink-0">/</span>
+                    {isLast ? (
+                      <span className="text-sm font-medium truncate" style={{ color: 'var(--nwd-teal)' }}>
+                        {crumb.label}
+                      </span>
+                    ) : crumb.href ? (
+                      <Link
+                        href={crumb.href}
+                        className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors"
+                      >
+                        {crumb.label}
+                      </Link>
+                    ) : isBackTarget ? (
+                      <button
+                        type="button"
+                        onClick={onBack}
+                        className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors cursor-pointer"
+                      >
+                        {crumb.label}
+                      </button>
+                    ) : (
+                      <span className="text-sm text-gray-500 font-medium">{crumb.label}</span>
+                    )}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
 
-        {profile?.role === 'contractor' && (
-          <>
-            <span>Contractor Dashboard | </span>
-
-            <button onClick={() => router.push('/login/contractor')}>
-              My Projects
-            </button>
-          </>
-        )}
-
-        {profile?.role === 'client' && (
-          <>
-            <span>Client Dashboard | </span>
-
-            <button onClick={() => router.push('/login/client')}>
-              My Projects
-            </button>
-          </>
-        )}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <UserMenu />
+          </div>
+        </div>
       </div>
-
-      <UserMenu />
-    </div>
+    </header>
   )
 }
