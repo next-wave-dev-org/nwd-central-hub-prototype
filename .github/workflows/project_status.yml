@@ -105,7 +105,7 @@ jobs:
           set -e
           
           # --- Helper function for required IDs ---
-          req() { test -n "$1" && [[ ! "$1" =~ ^[0-9]+$ ]] || {
+          req() { [ -n "$1" ] && [ "$1" != "null" ] || {
             echo "::error ::Missing or invalid ID for $2"; exit 1;
           }; }
           # ----------------------------------------
