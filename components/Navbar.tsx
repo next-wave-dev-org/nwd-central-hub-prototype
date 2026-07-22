@@ -3,6 +3,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import UserMenu from '@/components/UserMenu'
+import { useAuth } from '@/components/AuthProvider'
+import { dashboardBreadcrumb } from '@/lib/navigation'
 
 export type NavbarBreadcrumb = {
   label: string
@@ -12,9 +14,35 @@ export type NavbarBreadcrumb = {
 type NavbarProps = {
   breadcrumbs: NavbarBreadcrumb[]
   onBack?: () => void
+  /**
+   * Set false where the role dashboard is unreachable — e.g. the forced
+   * temporary-password change, which RouteGuard bounces straight back to.
+   */
+  linkBrand?: boolean
 }
 
-export default function Navbar({ breadcrumbs, onBack }: NavbarProps) {
+export default function Navbar({ breadcrumbs, onBack, linkBrand = true }: NavbarProps) {
+  const { profile } = useAuth()
+  const dashboardHref = linkBrand ? dashboardBreadcrumb(profile?.role).href : undefined
+
+  const brand = (
+    <>
+      <Image
+        src="/NextWaveDev_FINAL_small.png"
+        alt="NextWaveDev logo"
+        width={36}
+        height={36}
+        className="object-contain flex-shrink-0"
+      />
+      <span
+        className="hidden sm:inline font-semibold text-base tracking-tight flex-shrink-0"
+        style={{ color: 'var(--nwd-purple)' }}
+      >
+        NextWaveDev
+      </span>
+    </>
+  )
+
   return (
     <header className="bg-white">
       {/* The divider lives on the centered container (not the full-bleed
@@ -25,21 +53,22 @@ export default function Navbar({ breadcrumbs, onBack }: NavbarProps) {
           non-scrolling pages. */}
       <div className="w-[90%] mx-auto border-b" style={{ borderColor: 'var(--nwd-border)' }}>
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Image
-              src="/NextWaveDev_FINAL_small.png"
-              alt="NextWaveDev logo"
-              width={36}
-              height={36}
-              className="object-contain flex-shrink-0"
-            />
-            <div className="flex items-center min-w-0">
-              <span
-                className="hidden sm:inline font-semibold text-base tracking-tight flex-shrink-0"
-                style={{ color: 'var(--nwd-purple)' }}
+          <div className="flex items-center min-w-0 flex-1">
+            {/* Logo and wordmark are one target back to the user's own
+                dashboard. gap-3 lives on the link so the spacing between the
+                two halves is unchanged whether or not it's clickable. */}
+            {dashboardHref ? (
+              <Link
+                href={dashboardHref}
+                className="flex items-center gap-3 flex-shrink-0 hover:opacity-80 transition-opacity"
+                aria-label="Go to dashboard"
               >
-                NextWaveDev
-              </span>
+                {brand}
+              </Link>
+            ) : (
+              <div className="flex items-center gap-3 flex-shrink-0">{brand}</div>
+            )}
+            <div className="flex items-center min-w-0">
               {breadcrumbs.map((crumb, i) => {
                 const isLast = i === breadcrumbs.length - 1
                 const isBackTarget = !isLast && i === breadcrumbs.length - 2 && !crumb.href && !!onBack

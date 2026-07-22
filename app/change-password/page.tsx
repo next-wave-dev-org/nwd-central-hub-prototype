@@ -82,7 +82,7 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "white" }}>
-      <Navbar breadcrumbs={breadcrumbs} />
+      <Navbar breadcrumbs={breadcrumbs} linkBrand={!forced} />
 
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md border rounded-lg p-6 shadow">
