@@ -46,7 +46,7 @@ function AdminDashboardContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <Navbar breadcrumbs={[{ label: 'Admin Dashboard' }]} />
+      <Navbar title="Admin Dashboard" />
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-14">
         <div className="w-full max-w-md">

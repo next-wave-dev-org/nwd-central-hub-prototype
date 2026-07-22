@@ -103,12 +103,7 @@ function AdminRequestsContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <Navbar
-        breadcrumbs={[
-          { label: 'Admin Dashboard', href: '/login/admin' },
-          { label: 'Pending Requests' },
-        ]}
-      />
+      <Navbar title="Pending Requests" />
 
       <main className="flex-1 max-w-3xl mx-auto px-6 py-12 w-full">
 

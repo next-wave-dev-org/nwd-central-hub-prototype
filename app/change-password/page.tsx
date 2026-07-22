@@ -5,23 +5,15 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/components/AuthProvider";
-import { dashboardBreadcrumb } from "@/lib/navigation";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
   const { profile } = useAuth();
 
-  // RouteGuard forces users with a temporary password here, so the dashboard
-  // crumb would only bounce them straight back. In that mode the page is a
-  // deliberate dead end and shows just the current crumb.
+  // RouteGuard forces users with a temporary password here, so linking the
+  // brand back to the dashboard would only bounce them straight back. In that
+  // mode the page is a deliberate dead end.
   const forced = profile?.is_temporary_password;
-  const breadcrumbs = forced
-    ? [{ label: "Change Password" }]
-    : [
-        dashboardBreadcrumb(profile?.role),
-        { label: "Profile", href: "/profile" },
-        { label: "Change Password" },
-      ];
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -82,7 +74,7 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "white" }}>
-      <Navbar breadcrumbs={breadcrumbs} linkBrand={!forced} />
+      <Navbar title="Change Password" linkBrand={!forced} />
 
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md border rounded-lg p-6 shadow">

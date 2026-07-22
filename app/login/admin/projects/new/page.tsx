@@ -75,12 +75,7 @@ function CreateProjectContent() {
     return (
         <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-            <Navbar
-                breadcrumbs={[
-                    { label: 'Admin Dashboard', href: '/login/admin' },
-                    { label: 'Create Project' },
-                ]}
-            />
+            <Navbar title="Create Project" />
 
             <main className="flex-1 px-6 py-10">
                 <div className="max-w-2xl mx-auto">

@@ -87,12 +87,7 @@ function ClientProjectsContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <Navbar
-        breadcrumbs={[
-          { label: 'Client Dashboard', href: '/login/client' },
-          { label: 'Active Projects' },
-        ]}
-      />
+      <Navbar title="Active Projects" />
 
       <main className="flex-1 px-6 py-10">
         <div className="max-w-5xl mx-auto">

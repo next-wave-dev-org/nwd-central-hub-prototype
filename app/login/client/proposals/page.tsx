@@ -68,12 +68,7 @@ function SubmissionsContent() {
     return (
         <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-            <Navbar
-                breadcrumbs={[
-                    { label: 'Client Dashboard', href: '/login/client' },
-                    { label: 'Proposals' },
-                ]}
-            />
+            <Navbar title="Proposals" />
 
             <main className="flex-1 px-6 py-10">
                 <div className="max-w-5xl mx-auto flex flex-col gap-10">

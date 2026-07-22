@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
@@ -24,7 +24,6 @@ type Project = {
 
 function ProjectWorkspaceContent() {
   const { id } = useParams<{ id: string }>()
-  const router = useRouter()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -55,13 +54,7 @@ function ProjectWorkspaceContent() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
-      <Navbar
-        breadcrumbs={[
-          { label: 'Active Projects' },
-          { label: loading ? 'Loading…' : notFound ? 'Not Found' : project?.title || '' },
-        ]}
-        onBack={() => router.back()}
-      />
+      <Navbar title={loading ? 'Loading…' : notFound ? 'Not Found' : project?.title || ''} />
 
       <main className="flex-1 px-6 py-10">
         <div className="max-w-5xl mx-auto">

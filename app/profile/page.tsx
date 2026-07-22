@@ -2,16 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
-import { dashboardBreadcrumb } from '@/lib/navigation'
 import { supabase } from '@/lib/supabase'
 
 function ProfileContent() {
   const { profile } = useAuth()
-  const router = useRouter()
 
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
@@ -77,10 +74,7 @@ function ProfileContent() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
-      <Navbar
-        breadcrumbs={[dashboardBreadcrumb(profile?.role), { label: 'Profile' }]}
-        onBack={() => router.back()}
-      />
+      <Navbar title="Profile" />
 
       <main className="flex-1 px-6 py-14">
         <div className="w-full max-w-md mx-auto">

@@ -131,7 +131,7 @@ function ContractorContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <Navbar breadcrumbs={[{ label: 'Contractor Dashboard' }]} />
+      <Navbar title="Contractor Dashboard" />
 
       <main className="max-w-5xl mx-auto px-6 py-14 w-full flex flex-col gap-16">
 

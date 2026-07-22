@@ -71,13 +71,7 @@ function NewProposalContent() {
     return (
         <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-            <Navbar
-                breadcrumbs={[
-                    { label: 'Client Dashboard', href: '/login/client' },
-                    { label: 'Proposals', href: '/login/client/proposals' },
-                    { label: 'New' },
-                ]}
-            />
+            <Navbar title="New Proposal" />
 
             <main className="flex-1 px-6 py-10">
                 <div className="max-w-2xl mx-auto">

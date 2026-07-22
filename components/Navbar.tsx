@@ -4,16 +4,11 @@ import Image from 'next/image'
 import Link from 'next/link'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/components/AuthProvider'
-import { dashboardBreadcrumb } from '@/lib/navigation'
-
-export type NavbarBreadcrumb = {
-  label: string
-  href?: string
-}
+import { dashboardHref } from '@/lib/navigation'
 
 type NavbarProps = {
-  breadcrumbs: NavbarBreadcrumb[]
-  onBack?: () => void
+  /** The current page, shown after the brand as "NextWaveDev / Title". */
+  title: string
   /**
    * Set false where the role dashboard is unreachable — e.g. the forced
    * temporary-password change, which RouteGuard bounces straight back to.
@@ -21,9 +16,9 @@ type NavbarProps = {
   linkBrand?: boolean
 }
 
-export default function Navbar({ breadcrumbs, onBack, linkBrand = true }: NavbarProps) {
+export default function Navbar({ title, linkBrand = true }: NavbarProps) {
   const { profile } = useAuth()
-  const dashboardHref = linkBrand ? dashboardBreadcrumb(profile?.role).href : undefined
+  const brandHref = linkBrand ? dashboardHref(profile?.role) : undefined
 
   const brand = (
     <>
@@ -57,9 +52,9 @@ export default function Navbar({ breadcrumbs, onBack, linkBrand = true }: Navbar
             {/* Logo and wordmark are one target back to the user's own
                 dashboard. gap-3 lives on the link so the spacing between the
                 two halves is unchanged whether or not it's clickable. */}
-            {dashboardHref ? (
+            {brandHref ? (
               <Link
-                href={dashboardHref}
+                href={brandHref}
                 className="flex items-center gap-3 flex-shrink-0 hover:opacity-80 transition-opacity"
                 aria-label="Go to dashboard"
               >
@@ -69,43 +64,10 @@ export default function Navbar({ breadcrumbs, onBack, linkBrand = true }: Navbar
               <div className="flex items-center gap-3 flex-shrink-0">{brand}</div>
             )}
             <div className="flex items-center min-w-0">
-              {breadcrumbs.map((crumb, i) => {
-                const isLast = i === breadcrumbs.length - 1
-                const isBackTarget = !isLast && i === breadcrumbs.length - 2 && !crumb.href && !!onBack
-
-                return (
-                  <span
-                    key={i}
-                    className={`items-center ${isLast ? 'flex min-w-0' : 'hidden sm:flex flex-shrink-0'}`}
-                  >
-                    {/* On mobile only the current (last) crumb shows; its
-                        separator stays so it reads "logo / Current Page". */}
-                    <span className="text-gray-400 mx-2 select-none flex-shrink-0">/</span>
-                    {isLast ? (
-                      <span className="text-sm font-medium truncate" style={{ color: 'var(--nwd-teal)' }}>
-                        {crumb.label}
-                      </span>
-                    ) : crumb.href ? (
-                      <Link
-                        href={crumb.href}
-                        className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors"
-                      >
-                        {crumb.label}
-                      </Link>
-                    ) : isBackTarget ? (
-                      <button
-                        type="button"
-                        onClick={onBack}
-                        className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors cursor-pointer"
-                      >
-                        {crumb.label}
-                      </button>
-                    ) : (
-                      <span className="text-sm text-gray-500 font-medium">{crumb.label}</span>
-                    )}
-                  </span>
-                )
-              })}
+              <span className="text-gray-400 mx-2 select-none flex-shrink-0">/</span>
+              <span className="text-sm font-medium truncate" style={{ color: 'var(--nwd-teal)' }}>
+                {title}
+              </span>
             </div>
           </div>
 

@@ -288,12 +288,7 @@ function ManageUsersContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
 
-      <Navbar
-        breadcrumbs={[
-          { label: 'Admin Dashboard', href: '/login/admin' },
-          { label: 'Manage Users' },
-        ]}
-      />
+      <Navbar title="Manage Users" />
 
       <main className="flex-1 px-6 py-10">
         <div className="max-w-5xl mx-auto flex flex-col gap-10">
