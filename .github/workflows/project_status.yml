@@ -2,7 +2,7 @@ name: Sync Project Status
 
 on:
   issues:
-    types: [opened, assigned, closed, reopened]
+    types: [opened, assigned, unassigned, closed, reopened]
   pull_request_target:
     types: [opened, ready_for_review, converted_to_draft, closed, reopened]
   pull_request_review:
@@ -41,13 +41,14 @@ jobs:
           case "$EVENT_NAME" in
             issues)
               case "$ACTION" in
-                opened)   desired="Backlog" ;;
-                assigned) desired="In Progress" ;;
-                closed)   desired="Done" ;;
-                reopened) desired="In Progress" ;;
+                opened)     desired="Ready" ;;
+                assigned)   desired="In Progress" ;;
+                unassigned) desired="Ready" ;;
+                closed)     desired="Done" ;;
+                reopened)   desired="Backlog" ;;
               esac
               ;;
-            pull_request)
+            pull_request_target)
               case "$ACTION" in
                 opened)
                   if [ "$IS_DRAFT" = "true" ]; then
@@ -70,9 +71,11 @@ jobs:
               ;;
             pull_request_review)
               # Review submitted on a PR
-              # If the review requested changes, mark as Blocked
-              if [ "$ACTION" = "submitted" ] && [ "$REVIEW_STATE" = "changes_requested" ]; then
-                desired="Blocked"
+              if [ "$ACTION" = "submitted" ]; then
+                case "$REVIEW_STATE" in
+                  changes_requested) desired="Blocked" ;;    # Changes requested → Blocked
+                  approved)          desired="In Review" ;;  # Approved → (back to) In Review
+                esac
               fi
               ;;
           esac
@@ -102,7 +105,7 @@ jobs:
           set -e
           
           # --- Helper function for required IDs ---
-          req() { test -n "$1" && [[ ! "$1" =~ ^[0-9]+$ ]] || {
+          req() { [ -n "$1" ] && [ "$1" != "null" ] || {
             echo "::error ::Missing or invalid ID for $2"; exit 1;
           }; }
           # ----------------------------------------
