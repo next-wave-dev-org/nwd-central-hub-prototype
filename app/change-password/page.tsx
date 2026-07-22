@@ -3,9 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
+  const { profile } = useAuth();
+
+  // RouteGuard forces users with a temporary password here, so linking the
+  // brand back to the dashboard would only bounce them straight back. In that
+  // mode the page is a deliberate dead end.
+  const forced = profile?.is_temporary_password;
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -65,57 +73,61 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md border rounded-lg p-6 shadow">
-        <h1 className="text-2xl font-bold mb-4">Change Password</h1>
+    <div className="min-h-screen flex flex-col" style={{ background: "white" }}>
+      <Navbar title="Change Password" linkBrand={!forced} />
 
-        <form onSubmit={handlePasswordUpdate} className="space-y-4">
-          <div>
-            <label className="block mb-1 font-medium">
-              New Password
-            </label>
+      <main className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md border rounded-lg p-6 shadow">
+          <h1 className="text-2xl font-bold mb-4">Change Password</h1>
 
-            <input
-              type="password"
-              className="w-full border rounded p-2"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
-          </div>
+          <form onSubmit={handlePasswordUpdate} className="space-y-4">
+            <div>
+              <label className="block mb-1 font-medium">
+                New Password
+              </label>
 
-          <div>
-            <label className="block mb-1 font-medium">
-              Confirm Password
-            </label>
+              <input
+                type="password"
+                className="w-full border rounded p-2"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
 
-            <input
-              type="password"
-              className="w-full border rounded p-2"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
-          </div>
+            <div>
+              <label className="block mb-1 font-medium">
+                Confirm Password
+              </label>
 
-          {error && (
-            <p className="text-red-500 text-sm">
-              {error}
-            </p>
-          )}
+              <input
+                type="password"
+                className="w-full border rounded p-2"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
 
-          {success && (
-            <p className="text-green-500 text-sm">
-              {success}
-            </p>
-          )}
+            {error && (
+              <p className="text-red-500 text-sm">
+                {error}
+              </p>
+            )}
 
-          <button
-            type="submit"
-            className="w-full rounded bg-black text-white p-2"
-          >
-            Update Password
-          </button>
-        </form>
-      </div>
-    </main>
+            {success && (
+              <p className="text-green-500 text-sm">
+                {success}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="w-full rounded bg-black text-white p-2"
+            >
+              Update Password
+            </button>
+          </form>
+        </div>
+      </main>
+    </div>
   );
 }

@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Always reserve the scrollbar gutter so page width stays constant whether a
+   page scrolls or not — this keeps the navbar's centered content and divider
+   (see components/NWDHeader.tsx) from shifting between pages. */
+html {
+  scrollbar-gutter: stable;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

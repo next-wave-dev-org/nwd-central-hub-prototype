@@ -64,42 +64,30 @@ All pages share a three-part flex structure:
 
 ### Header
 
-White bar with the NWD logo, a multi-level breadcrumb, and a **Back** link in the top-right. Use `max-w-5xl` for data-dense pages.
-
-- Breadcrumb segments: brand name (purple) → parent page (gray, clickable `<Link>` or `<button onClick={router.back()}>`) → current page (teal, non-clickable)
-- Back link sits flush right: chevron-left SVG + "Back" text, `text-gray-400 hover:text-gray-600`
+Every page renders its header via the shared `components/Navbar.tsx` — do not hand-roll header markup. The NWD logo, a `breadcrumbs` trail expanding to its right, and `UserMenu` flush right.
 
 ```tsx
-<header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
-  <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-    <Image src="/NextWaveDev_FINAL_small.png" alt="NextWaveDev logo" width={36} height={36} className="object-contain" />
-    <div className="flex items-center flex-1 min-w-0">
-      <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
-        NextWaveDev
-      </span>
-      <span className="text-gray-400 mx-2 select-none">/</span>
-      {/* Parent page — use Link for a fixed route, button+router.back() for dynamic origin */}
-      <Link href="/parent-route" className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors">
-        Parent Page
-      </Link>
-      <span className="text-gray-400 mx-2 select-none">/</span>
-      {/* Current page — teal, no interaction */}
-      <span className="text-sm font-medium truncate" style={{ color: 'var(--nwd-teal)' }}>
-        Current Page
-      </span>
-    </div>
-    {/* Back link — top-right of header */}
-    <Link href="/parent-route" className="text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 flex-shrink-0">
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10 3L5 8l5 5" />
-      </svg>
-      Back
-    </Link>
-  </div>
-</header>
+<Navbar
+  breadcrumbs={[
+    { label: 'Parent Page', href: '/parent-route' },
+    { label: 'Current Page' },
+  ]}
+/>
 ```
 
-For pages with a dynamic origin (e.g. shared workspace reached from multiple roles), replace `<Link>` with `<button onClick={() => router.back()}>` for both the parent breadcrumb segment and the Back link.
+- `breadcrumbs`: `{ label: string; href?: string }[]`. Items with `href` render as clickable gray links; the last item (no `href`) renders teal and non-clickable, truncating if long (e.g. a project title).
+- `onBack?: () => void` — for pages with a dynamic origin (e.g. the shared workspace `/login/projects/[id]`, or `/profile` and `/settings` reachable from any role's dashboard) where `router.back()` is needed instead of a fixed route. When provided, it also drives the click behavior of the second-to-last breadcrumb segment.
+- The "Back" link/button in the top-right (derived automatically from the second-to-last breadcrumb item) is mobile-only (`sm:hidden`) — on desktop the breadcrumb parent link is the way back, so a separate Back control is redundant.
+- The "NextWaveDev" wordmark hides below the `sm` breakpoint so the breadcrumb trail runs directly off the logo on narrow viewports.
+
+**Layout (two nested containers):**
+
+- **Outer** — `w-[90%] mx-auto` carrying the `border-b` divider, so the divider line spans 90% of the width, centered.
+- **Inner** — `max-w-5xl mx-auto px-6 py-4` holding the content row, so the logo/breadcrumbs (left) and `UserMenu` (right) sit at a consistent capped position aligned with data-dense page content.
+
+This split is deliberate: the divider is drawn on the centered container rather than a full-bleed `<header>` because a full-bleed border can't reach the true viewport edge — the reserved scrollbar gutter (see below) is space the browser sets aside for the scrollbar and page content can't paint into it, which would leave a gap in the line. A contained divider sidesteps that entirely.
+
+**No horizontal shift between pages:** `app/globals.css` sets `html { scrollbar-gutter: stable; }` so the scrollbar gutter is always reserved (the scrollbar still only appears when a page actually overflows). Page width is therefore identical whether a page scrolls or not, keeping the header's centered content and divider from jumping when navigating between short and long pages.
 
 ### Footer
 

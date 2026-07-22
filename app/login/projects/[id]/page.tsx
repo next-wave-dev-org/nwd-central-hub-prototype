@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import Image from 'next/image'
+import { useParams } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
-import UserMenu from '@/components/UserMenu'
+import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
 
 type ContractorProject = {
@@ -25,7 +24,6 @@ type Project = {
 
 function ProjectWorkspaceContent() {
   const { id } = useParams<{ id: string }>()
-  const router = useRouter()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -56,43 +54,7 @@ function ProjectWorkspaceContent() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
-      <header className="bg-white border-b" style={{ borderColor: 'var(--nwd-border)' }}>
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Image
-            src="/NextWaveDev_FINAL_small.png"
-            alt="NextWaveDev logo"
-            width={36}
-            height={36}
-            className="object-contain"
-          />
-          <div className="flex items-center flex-1 min-w-0">
-            <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--nwd-purple)' }}>
-              NextWaveDev
-            </span>
-            <span className="text-gray-400 mx-2 select-none">/</span>
-            <button
-              onClick={() => router.back()}
-              className="text-sm text-gray-500 font-medium hover:text-gray-700 transition-colors"
-            >
-              Active Projects
-            </button>
-            <span className="text-gray-400 mx-2 select-none">/</span>
-            <span className="text-sm font-medium truncate" style={{ color: 'var(--nwd-teal)' }}>
-              {loading ? 'Loading…' : notFound ? 'Not Found' : project?.title}
-            </span>
-          </div>
-          <button
-            onClick={() => router.back()}
-            className="text-sm text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 flex-shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 3L5 8l5 5" />
-            </svg>
-            Back
-          </button>
-          <UserMenu />
-        </div>
-      </header>
+      <Navbar title={loading ? 'Loading…' : notFound ? 'Not Found' : project?.title || ''} />
 
       <main className="flex-1 px-6 py-10">
         <div className="max-w-5xl mx-auto">
