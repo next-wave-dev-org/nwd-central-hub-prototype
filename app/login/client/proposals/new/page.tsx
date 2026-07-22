@@ -74,8 +74,8 @@ function NewProposalContent() {
             <Navbar
                 breadcrumbs={[
                     { label: 'Client Dashboard', href: '/login/client' },
-                    { label: 'My Submissions', href: '/login/client/proposals' },
-                    { label: 'New Proposal' },
+                    { label: 'Proposals', href: '/login/client/proposals' },
+                    { label: 'New' },
                 ]}
             />
 

@@ -71,7 +71,7 @@ function SubmissionsContent() {
             <Navbar
                 breadcrumbs={[
                     { label: 'Client Dashboard', href: '/login/client' },
-                    { label: 'My Submissions' },
+                    { label: 'Proposals' },
                 ]}
             />
 
