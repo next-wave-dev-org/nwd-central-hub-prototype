@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
+import { useAuth } from '@/components/AuthProvider'
+import { dashboardBreadcrumb } from '@/lib/navigation'
 
 const TIMEZONES = [
   'UTC',
@@ -60,6 +62,7 @@ function ToggleSwitch({
 
 function SettingsContent() {
   const router = useRouter()
+  const { profile } = useAuth()
 
   const [timezone, setTimezone] = useState(TIMEZONES[0])
   const [emailNotifications, setEmailNotifications] = useState(true)
@@ -69,7 +72,7 @@ function SettingsContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
       <Navbar
-        breadcrumbs={[{ label: 'Dashboard' }, { label: 'Settings' }]}
+        breadcrumbs={[dashboardBreadcrumb(profile?.role), { label: 'Settings' }]}
         onBack={() => router.back()}
       />
 

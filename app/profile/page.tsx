@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
+import { dashboardBreadcrumb } from '@/lib/navigation'
 import { supabase } from '@/lib/supabase'
 
 function ProfileContent() {
@@ -77,7 +78,7 @@ function ProfileContent() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
       <Navbar
-        breadcrumbs={[{ label: 'Dashboard' }, { label: 'Profile' }]}
+        breadcrumbs={[dashboardBreadcrumb(profile?.role), { label: 'Profile' }]}
         onBack={() => router.back()}
       />
 
