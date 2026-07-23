@@ -63,8 +63,8 @@ Not required for the 8-step acceptance test, but necessary for Beta v1.0 quality
 | #86 | Refactor: Extract NWD Header into Shared Component | — | 📋 Not Started | Unblocked after #80 merges |
 | #81 | User Settings & Logout — Header Dropdown | #88 (draft) | 🔄 In Progress | Depends on #86 |
 | #82 | Profile and Settings Pages (`/profile`, `/settings`) | #89 (draft) | 🔄 In Progress | Depends on #81 |
-| #83 | Redesign Landing/Login Page | #90 (draft) | 🔄 In Progress | oAuth buttons as placeholders until #84 |
-| #84 | Set Up oAuth and Account Linking | — | ⏳ Deferred | Placeholders ship with #83; full impl post-MVP |
+| #83 | Redesign Landing/Login Page | #90 (draft) | 🔄 In Progress | OAuth buttons now wired to real sign-in/linking via #84 |
+| #84 | Set Up oAuth and Account Linking | — | ✅ Done | Google/GitHub/LinkedIn sign-in + account linking shipped (commit `644be3a`); see `docs/architecture.md` → "OAuth Sign-In & Account Linking" |
 
 ---
 
@@ -198,7 +198,7 @@ All uploads stored in Supabase Storage with RLS scoped to project membership. Th
 
 ---
 
-*Last updated: 2026-07-17*
+*Last updated: 2026-07-23*
 
 
 # update 7/21 desired improvements and features

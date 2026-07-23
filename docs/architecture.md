@@ -286,6 +286,10 @@ Auto-linking depends on the provider returning a *verified* email that exactly m
 
 `app/auth/callback/route.ts` checks for this after every code exchange: it looks up `profiles` by the resulting user id, and if none exists, it signs that session out, best-effort deletes the orphaned `auth.users` row via `supabaseAdmin.auth.admin.deleteUser()`, and redirects to `/login` with an explanatory error ("No account found for this email — sign in with your password first, then link this provider from Settings.") instead of letting the request fall through to `/unauthorized`. This check only runs for sign-in — a linking attempt from `/settings` always reuses the already-authenticated user's id, which is guaranteed to already have a `profiles` row.
 
+### Production configuration dependency
+
+`exchangeCodeForSession` and any Supabase-generated auth email (confirmation, magic link, password reset) redirect using Supabase's own **Site URL** and **Redirect URLs allow-list** (Authentication → URL Configuration), not `NEXT_PUBLIC_APP_URL` — that env var only controls links the app builds itself (e.g. the Resend onboarding email in `lib/email/sendWelcomeEmail.ts`). Site URL defaulted to `localhost` until 2026-07, which meant the production OAuth callback and any Supabase auth email would silently redirect to a dev URL. Now set to `https://portal.nextwavedev.org` with the production domain also added to the Redirect URLs allow-list. Separately, Supabase Authentication → SMTP Settings had no custom SMTP configured, so Supabase-generated auth emails were going through Supabase's own rate-limited built-in sender rather than Resend — now configured with Resend as custom SMTP. Full history in `docs/outside_work.md`.
+
 ---
 
 ## Proposal-to-Project Lifecycle
@@ -384,4 +388,4 @@ For contributors picking up new issues, the following parts of the intended arch
 
 ---
 
-*Last updated: [Update on commit]*
+*Last updated: 2026-07-23*
