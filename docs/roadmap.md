@@ -199,3 +199,13 @@ All uploads stored in Supabase Storage with RLS scoped to project membership. Th
 ---
 
 *Last updated: 2026-07-17*
+
+
+# update 7/21 desired improvements and features
+
+Collapsable details on all pages
+Slack integration
+Mobile App publishing (finish current issues to pause)
+clockify integration
+
+login/client/projects missing settings button and user name
