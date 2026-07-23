@@ -56,23 +56,12 @@ function AdminRequestsContent() {
     setActing(req.id)
     setError(null)
 
-    const { error: updateError } = await supabase
-      .from('proposal_requests')
-      .update({ status: 'approved' })
-      .eq('id', req.id)
+    const { error: rpcError } = await supabase.rpc('approve_contractor_request', {
+      p_request_id: req.id,
+    })
 
-    if (updateError) {
-      setError(updateError.message)
-      setActing(null)
-      return
-    }
-
-    const { error: insertError } = await supabase
-      .from('contractor_projects')
-      .insert({ contractor_id: req.contractor_id, project_id: req.project_id })
-
-    if (insertError) {
-      setError(insertError.message)
+    if (rpcError) {
+      setError(rpcError.message)
       setActing(null)
       return
     }

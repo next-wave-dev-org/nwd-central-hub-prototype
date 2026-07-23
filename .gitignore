@@ -41,3 +41,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local agent/IDE tooling (personal config, not shared project state)
+.agents/
+.claude/
+.idea/
+skills-lock.json
