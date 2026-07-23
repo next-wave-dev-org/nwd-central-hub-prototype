@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { UserIdentity } from '@supabase/supabase-js'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
+import { supabase } from '@/lib/supabase'
+import { GoogleIcon, GithubIcon, LinkedInIcon } from '@/components/SocialIcons'
 
 const TIMEZONES = [
   'UTC',
@@ -16,10 +19,12 @@ const TIMEZONES = [
   'Australia/Sydney',
 ]
 
-const LINKED_ACCOUNTS = [
-  { name: 'Google', initial: 'G', color: '#EA4335' },
-  { name: 'LinkedIn', initial: 'in', color: '#0A66C2' },
-  { name: 'GitHub', initial: 'GH', color: '#24292F' },
+type OAuthProvider = 'google' | 'linkedin_oidc' | 'github'
+
+const LINKED_ACCOUNTS: { name: string; provider: OAuthProvider; Icon: () => React.JSX.Element }[] = [
+  { name: 'Google', provider: 'google', Icon: GoogleIcon },
+  { name: 'LinkedIn', provider: 'linkedin_oidc', Icon: LinkedInIcon },
+  { name: 'GitHub', provider: 'github', Icon: GithubIcon },
 ]
 
 function ToggleSwitch({
@@ -63,6 +68,72 @@ function SettingsContent() {
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [pushNotifications, setPushNotifications] = useState(false)
   const [smsNotifications, setSmsNotifications] = useState(false)
+
+  const [identities, setIdentities] = useState<UserIdentity[]>([])
+  const [identitiesLoading, setIdentitiesLoading] = useState(true)
+  const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(null)
+  const [linkedAccountsError, setLinkedAccountsError] = useState('')
+  const [linkedAccountsMessage, setLinkedAccountsMessage] = useState('')
+
+  const loadIdentities = async () => {
+    setIdentitiesLoading(true)
+    const { data, error } = await supabase.auth.getUserIdentities()
+    if (error) {
+      setLinkedAccountsError(error.message)
+    } else {
+      setIdentities(data.identities)
+    }
+    setIdentitiesLoading(false)
+  }
+
+  useEffect(() => {
+    const init = async () => {
+      await loadIdentities()
+
+      const params = new URLSearchParams(window.location.search)
+      const error = params.get('error')
+      if (error) {
+        setLinkedAccountsError(error)
+        window.history.replaceState(null, '', '/settings')
+      }
+    }
+    init()
+  }, [])
+
+  const handleConnect = async (provider: OAuthProvider) => {
+    setLinkedAccountsError('')
+    setLinkedAccountsMessage('')
+    setPendingProvider(provider)
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/settings`,
+      },
+    })
+
+    if (error) {
+      setLinkedAccountsError(error.message)
+      setPendingProvider(null)
+    }
+    // On success the browser navigates to the provider — nothing else to do here.
+  }
+
+  const handleDisconnect = async (identity: UserIdentity) => {
+    setLinkedAccountsError('')
+    setLinkedAccountsMessage('')
+    setPendingProvider(identity.provider as OAuthProvider)
+
+    const { error } = await supabase.auth.unlinkIdentity(identity)
+
+    if (error) {
+      setLinkedAccountsError(error.message)
+    } else {
+      setLinkedAccountsMessage(`Disconnected ${identity.provider}.`)
+      await loadIdentities()
+    }
+    setPendingProvider(null)
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -131,35 +202,64 @@ function SettingsContent() {
               <h2 className="text-2xl font-bold text-gray-900 mb-1">Linked Accounts</h2>
               <p className="text-sm text-gray-400 mb-4">Connect third-party accounts for single sign-on.</p>
 
+              {linkedAccountsMessage && (
+                <div className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800 mb-4">
+                  {linkedAccountsMessage}
+                </div>
+              )}
+
+              {linkedAccountsError && (
+                <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-4">
+                  {linkedAccountsError}
+                </div>
+              )}
+
               <div className="space-y-3">
-                {LINKED_ACCOUNTS.map((account) => (
-                  <div
-                    key={account.name}
-                    className="flex items-center justify-between px-4 py-3 border rounded-md"
-                    style={{ borderColor: 'var(--nwd-border)' }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold text-white flex-shrink-0"
-                        style={{ background: account.color }}
-                      >
-                        {account.initial}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900">{account.name}</span>
-                    </div>
-                    <button
-                      disabled
-                      title="Coming soon"
-                      className="text-xs px-3 py-1.5 rounded border font-medium text-gray-400 border-gray-200 cursor-not-allowed"
+                {LINKED_ACCOUNTS.map((account) => {
+                  const identity = identities.find((i) => i.provider === account.provider)
+                  const isPending = pendingProvider === account.provider
+                  const canDisconnect = identities.length > 1
+
+                  return (
+                    <div
+                      key={account.name}
+                      className="flex items-center justify-between px-4 py-3 border rounded-md"
+                      style={{ borderColor: 'var(--nwd-border)' }}
                     >
-                      Connect
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-full border text-gray-600 flex-shrink-0" style={{ borderColor: 'var(--nwd-border)' }}>
+                          <account.Icon />
+                        </span>
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">{account.name}</span>
+                          {identity && (
+                            <p className="text-xs text-gray-400">Connected</p>
+                          )}
+                        </div>
+                      </div>
+                      {identity ? (
+                        <button
+                          onClick={() => handleDisconnect(identity)}
+                          disabled={identitiesLoading || isPending || !canDisconnect}
+                          title={canDisconnect ? 'Disconnect this account' : 'Cannot disconnect your only sign-in method'}
+                          className="text-xs px-3 py-1.5 rounded border font-medium text-red-600 border-red-200 hover:bg-red-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isPending ? 'Disconnecting…' : 'Disconnect'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleConnect(account.provider)}
+                          disabled={identitiesLoading || pendingProvider !== null}
+                          className="text-xs px-3 py-1.5 rounded border font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ borderColor: 'var(--nwd-border)', color: 'var(--nwd-teal)' }}
+                        >
+                          {isPending ? 'Connecting…' : 'Connect'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-              <p className="text-xs text-gray-400 mt-3">
-                Coming soon — account linking will be available once OAuth support is added.
-              </p>
             </div>
           </div>
         </div>
