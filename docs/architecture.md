@@ -280,6 +280,12 @@ This is not a Supabase dashboard toggle — it's built-in GoTrue behavior. If a 
 
 **Testing caveat:** this only works for accounts with a real, deliverable email address. The shared dev seed accounts (`admin@email.com`, `client@email.com`, `contractor@email.com`) are fabricated addresses with no real Google/GitHub/LinkedIn account behind them, so OAuth sign-in/linking can never be verified against them — that's inherent to how OAuth works, not a config gap. To exercise this flow, sign in or link with your own real account against a throwaway test profile rather than the shared seed accounts. Password login against the shared seed accounts is unaffected.
 
+### Rejecting orphaned sign-ins
+
+Auto-linking depends on the provider returning a *verified* email that exactly matches an existing account. In practice this is unreliable for GitHub (accounts with "Keep my email addresses private" enabled don't expose a matchable email) and can also fail for LinkedIn if its email isn't marked verified. When that happens, `signInWithOAuth` doesn't fail — it succeeds and creates a **second, unrelated `auth.users` row** with no `profiles` row behind it, since only admin-created accounts get one.
+
+`app/auth/callback/route.ts` checks for this after every code exchange: it looks up `profiles` by the resulting user id, and if none exists, it signs that session out, best-effort deletes the orphaned `auth.users` row via `supabaseAdmin.auth.admin.deleteUser()`, and redirects to `/login` with an explanatory error ("No account found for this email — sign in with your password first, then link this provider from Settings.") instead of letting the request fall through to `/unauthorized`. This check only runs for sign-in — a linking attempt from `/settings` always reuses the already-authenticated user's id, which is guaranteed to already have a `profiles` row.
+
 ---
 
 ## Proposal-to-Project Lifecycle
