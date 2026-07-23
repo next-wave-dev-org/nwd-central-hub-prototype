@@ -1,11 +1,28 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import type { UserIdentity } from '@supabase/supabase-js'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
-import { GoogleIcon, GithubIcon, LinkedInIcon } from '@/components/SocialIcons'
+import { GithubIcon } from '@/components/SocialIcons'
+
+function GoogleColorIcon() {
+  return <Image src="/google_color.png" alt="Google" width={18} height={18} />
+}
+
+function LinkedInColorIcon() {
+  return <Image src="/linkedin_color.png" alt="LinkedIn" width={18} height={18} />
+}
+
+function GithubCenteredIcon() {
+  return (
+    <span className="flex" style={{ transform: 'translateX(0.5px)' }}>
+      <GithubIcon />
+    </span>
+  )
+}
 
 const TIMEZONES = [
   'UTC',
@@ -22,9 +39,9 @@ const TIMEZONES = [
 type OAuthProvider = 'google' | 'linkedin_oidc' | 'github'
 
 const LINKED_ACCOUNTS: { name: string; provider: OAuthProvider; Icon: () => React.JSX.Element }[] = [
-  { name: 'Google', provider: 'google', Icon: GoogleIcon },
-  { name: 'LinkedIn', provider: 'linkedin_oidc', Icon: LinkedInIcon },
-  { name: 'GitHub', provider: 'github', Icon: GithubIcon },
+  { name: 'Google', provider: 'google', Icon: GoogleColorIcon },
+  { name: 'LinkedIn', provider: 'linkedin_oidc', Icon: LinkedInColorIcon },
+  { name: 'GitHub', provider: 'github', Icon: GithubCenteredIcon },
 ]
 
 function ToggleSwitch({
