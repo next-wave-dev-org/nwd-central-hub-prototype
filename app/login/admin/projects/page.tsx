@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
@@ -13,6 +13,27 @@ type Project = {
   origin: 'client' | 'admin'
   budget: string | null
   status: string
+  created_at: string | null
+}
+
+type SortCol = 'title' | 'origin' | 'budget' | 'created'
+type SortDir = 'asc' | 'desc'
+
+function budgetValue(budget: string | null): number {
+  if (!budget) return -1
+  const n = parseFloat(budget.replace(/[^0-9.-]/g, ''))
+  return Number.isNaN(n) ? -1 : n
+}
+
+function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol | null; sortDir: SortDir }) {
+  const active = sortCol === col
+  const color = active ? 'var(--nwd-teal)' : '#d1d5db'
+  return (
+    <svg className="inline-block ml-1 w-3 h-3 flex-shrink-0" viewBox="0 0 10 12" fill="none" aria-hidden>
+      <path d="M5 1L2 4.5h6L5 1z" fill={active && sortDir === 'asc' ? color : '#d1d5db'} />
+      <path d="M5 11L8 7.5H2L5 11z" fill={active && sortDir === 'desc' ? color : '#d1d5db'} />
+    </svg>
+  )
 }
 
 function OriginBadge({ origin }: { origin: 'client' | 'admin' }) {
@@ -52,12 +73,14 @@ function AdminProjectsContent() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [sortCol, setSortCol] = useState<SortCol | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   useEffect(() => {
     const fetchProjects = async () => {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, title, description, origin, budget, status')
+        .select('id, title, description, origin, budget, status, created_at')
         .eq('status', 'active')
 
       if (!error) {
@@ -73,6 +96,40 @@ function AdminProjectsContent() {
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id))
   }
+
+  function toggleSort(col: SortCol) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedProjects = useMemo(() => {
+    if (!sortCol) return projects
+    const result = [...projects]
+    result.sort((a, b) => {
+      if (sortCol === 'budget') {
+        const diff = budgetValue(a.budget) - budgetValue(b.budget)
+        return sortDir === 'asc' ? diff : -diff
+      }
+      let av = '', bv = ''
+      if (sortCol === 'title')   { av = a.title.toLowerCase();  bv = b.title.toLowerCase() }
+      if (sortCol === 'origin')  { av = a.origin;                bv = b.origin }
+      if (sortCol === 'created') { av = a.created_at ?? '';      bv = b.created_at ?? '' }
+      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    })
+    return result
+  }, [projects, sortCol, sortDir])
+
+  const COLUMNS: { label: string; key: SortCol | null }[] = [
+    { label: 'Title',    key: 'title' },
+    { label: 'Origin',   key: 'origin' },
+    { label: 'Budget',   key: 'budget' },
+    { label: 'Status',   key: null },
+    { label: 'Created',  key: 'created' },
+  ]
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -129,19 +186,24 @@ function AdminProjectsContent() {
               <table className="min-w-full divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
                 <thead>
                   <tr style={{ background: 'var(--nwd-surface)' }}>
-                    {['Title', 'Origin', 'Budget', 'Status'].map((label) => (
+                    {COLUMNS.map(({ label, key }) => (
                       <th
                         key={label}
-                        className="px-4 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap"
+                        className={[
+                          'px-4 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap',
+                          key ? 'cursor-pointer select-none hover:text-gray-700' : '',
+                        ].join(' ')}
                         style={{ fontFamily: 'var(--font-geist-mono)' }}
+                        onClick={() => key && toggleSort(key)}
                       >
                         {label}
+                        {key && <SortIcon col={key} sortCol={sortCol} sortDir={sortDir} />}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
-                  {projects.map((project) => {
+                  {sortedProjects.map((project) => {
                     const isExpanded = expandedId === project.id
 
                     return (
@@ -189,12 +251,17 @@ function AdminProjectsContent() {
                           <td className="px-4 py-3 whitespace-nowrap">
                             <ActiveStatusBadge />
                           </td>
+                          <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap" style={{ fontFamily: 'var(--font-geist-mono)' }}>
+                            {project.created_at
+                              ? new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                              : '—'}
+                          </td>
                         </tr>
 
                         {isExpanded && (
                           <tr style={{ background: 'color-mix(in srgb, var(--nwd-teal) 5%, white)', borderTop: 'none' }}>
                             <td
-                              colSpan={4}
+                              colSpan={5}
                               className="px-6 py-4"
                               style={{ borderTop: '1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)' }}
                             >
