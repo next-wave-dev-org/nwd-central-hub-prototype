@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
@@ -11,6 +11,8 @@ type Project = {
   title: string
   description: string
   origin: 'client' | 'admin'
+  budget: string | null
+  status: string
 }
 
 function OriginBadge({ origin }: { origin: 'client' | 'admin' }) {
@@ -31,15 +33,31 @@ function OriginBadge({ origin }: { origin: 'client' | 'admin' }) {
   )
 }
 
+function ActiveStatusBadge() {
+  return (
+    <span
+      className="text-xs font-semibold tracking-wider px-2 py-0.5 rounded"
+      style={{
+        color: '#065f46',
+        background: 'color-mix(in srgb, #10b981 15%, transparent)',
+        fontFamily: 'var(--font-geist-mono)',
+      }}
+    >
+      Active
+    </span>
+  )
+}
+
 function AdminProjectsContent() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchProjects = async () => {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, title, description, origin')
+        .select('id, title, description, origin, budget, status')
         .eq('status', 'active')
 
       if (!error) {
@@ -51,6 +69,10 @@ function AdminProjectsContent() {
 
     fetchProjects()
   }, [])
+
+  function toggleExpand(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id))
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -103,21 +125,95 @@ function AdminProjectsContent() {
           )}
 
           {!loading && projects.length > 0 && (
-            <div className="grid gap-4">
-              {projects.map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/login/projects/${project.id}`}
-                  className="block p-6 border rounded-lg shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer"
-                  style={{ borderColor: 'var(--nwd-border)' }}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="text-lg font-bold text-gray-900">{project.title}</h2>
-                    <OriginBadge origin={project.origin} />
-                  </div>
-                  <p className="text-sm text-gray-500">{project.description}</p>
-                </Link>
-              ))}
+            <div className="border rounded-lg overflow-x-auto" style={{ borderColor: 'var(--nwd-border)' }}>
+              <table className="min-w-full divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
+                <thead>
+                  <tr style={{ background: 'var(--nwd-surface)' }}>
+                    {['Title', 'Origin', 'Budget', 'Status'].map((label) => (
+                      <th
+                        key={label}
+                        className="px-4 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap"
+                        style={{ fontFamily: 'var(--font-geist-mono)' }}
+                      >
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
+                  {projects.map((project) => {
+                    const isExpanded = expandedId === project.id
+
+                    return (
+                      <React.Fragment key={project.id}>
+                        <tr
+                          onClick={() => toggleExpand(project.id)}
+                          className="cursor-pointer transition-colors"
+                          style={{ background: isExpanded ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)' : undefined }}
+                          onMouseEnter={(e) => {
+                            if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--nwd-surface)'
+                          }}
+                          onMouseLeave={(e) => {
+                            ;(e.currentTarget as HTMLElement).style.background = isExpanded
+                              ? 'color-mix(in srgb, var(--nwd-teal) 5%, white)'
+                              : ''
+                          }}
+                        >
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <svg
+                                className="w-3 h-3 flex-shrink-0 transition-transform"
+                                style={{
+                                  color: isExpanded ? 'var(--nwd-teal)' : '#d1d5db',
+                                  transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                }}
+                                fill="none" viewBox="0 0 8 12" stroke="currentColor" strokeWidth="2"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2 2l4 4-4 4" />
+                              </svg>
+                              <Link
+                                href={`/login/projects/${project.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:underline"
+                              >
+                                {project.title}
+                              </Link>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <OriginBadge origin={project.origin} />
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                            {project.budget ? `$${project.budget}` : '—'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <ActiveStatusBadge />
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr style={{ background: 'color-mix(in srgb, var(--nwd-teal) 5%, white)', borderTop: 'none' }}>
+                            <td
+                              colSpan={4}
+                              className="px-6 py-4"
+                              style={{ borderTop: '1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)' }}
+                            >
+                              <p className="text-xs font-semibold tracking-widest mb-2" style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}>
+                                DESCRIPTION
+                              </p>
+                              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                                {project.description?.trim() || (
+                                  <span className="text-gray-400 italic">No description provided.</span>
+                                )}
+                              </p>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
 
