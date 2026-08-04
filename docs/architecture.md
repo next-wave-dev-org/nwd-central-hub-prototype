@@ -263,6 +263,35 @@ On first login, `RouteGuard` detects `is_temporary_password: true` and forces a 
 
 ---
 
+## OAuth Sign-In & Account Linking (Issue #84)
+
+Google, GitHub, and LinkedIn (`linkedin_oidc`) are configured as OAuth providers directly in the Supabase Dashboard (**Authentication → Providers**) — the app never handles provider client IDs/secrets itself.
+
+### Shared callback route
+
+Both sign-in and account linking route through one Route Handler, **`app/auth/callback/route.ts`**. It exchanges the `code` query param for a session via `exchangeCodeForSession` (PKCE flow) and redirects to a `next` param (same-origin relative paths only, to prevent open redirects) — defaulting to `/`, which lets `proxy.ts` handle the role-based dashboard redirect. `proxy.ts` allowlists `/auth/callback` in `PUBLIC_ROUTES`; without that, middleware would bounce the callback to `/login` before the code exchange runs.
+
+- **Sign-in** (`app/login/page.tsx`) calls `supabase.auth.signInWithOAuth({ provider })`.
+- **Linking** (`app/settings/page.tsx`) calls `supabase.auth.linkIdentity({ provider })` while already authenticated, and `supabase.auth.unlinkIdentity(identity)` to remove one — guarded so a user can't unlink their last remaining identity. This requires **manual linking** enabled in Supabase Auth settings, or both calls return a 422.
+
+### Automatic linking by verified email
+
+This is not a Supabase dashboard toggle — it's built-in GoTrue behavior. If a user signs in via OAuth with an email that matches an existing account whose `auth.users.email_confirmed_at` is already set, the new identity is merged into that existing account automatically instead of creating a second, orphaned user. Admin-created accounts already qualify for this: `createUser()` in `app/login/admin/users/create/actions.ts` passes `email_confirm: true`, which stamps `email_confirmed_at` at creation — no separate confirmation-email flow is needed.
+
+**Testing caveat:** this only works for accounts with a real, deliverable email address. The shared dev seed accounts (`admin@email.com`, `client@email.com`, `contractor@email.com`) are fabricated addresses with no real Google/GitHub/LinkedIn account behind them, so OAuth sign-in/linking can never be verified against them — that's inherent to how OAuth works, not a config gap. To exercise this flow, sign in or link with your own real account against a throwaway test profile rather than the shared seed accounts. Password login against the shared seed accounts is unaffected.
+
+### Rejecting orphaned sign-ins
+
+Auto-linking depends on the provider returning a *verified* email that exactly matches an existing account. In practice this is unreliable for GitHub (accounts with "Keep my email addresses private" enabled don't expose a matchable email) and can also fail for LinkedIn if its email isn't marked verified. When that happens, `signInWithOAuth` doesn't fail — it succeeds and creates a **second, unrelated `auth.users` row** with no `profiles` row behind it, since only admin-created accounts get one.
+
+`app/auth/callback/route.ts` checks for this after every code exchange: it looks up `profiles` by the resulting user id, and if none exists, it signs that session out, best-effort deletes the orphaned `auth.users` row via `supabaseAdmin.auth.admin.deleteUser()`, and redirects to `/login` with an explanatory error ("No account found for this email — sign in with your password first, then link this provider from Settings.") instead of letting the request fall through to `/unauthorized`. This check only runs for sign-in — a linking attempt from `/settings` always reuses the already-authenticated user's id, which is guaranteed to already have a `profiles` row.
+
+### Production configuration dependency
+
+`exchangeCodeForSession` and any Supabase-generated auth email (confirmation, magic link, password reset) redirect using Supabase's own **Site URL** and **Redirect URLs allow-list** (Authentication → URL Configuration), not `NEXT_PUBLIC_APP_URL` — that env var only controls links the app builds itself (e.g. the Resend onboarding email in `lib/email/sendWelcomeEmail.ts`). Site URL defaulted to `localhost` until 2026-07, which meant the production OAuth callback and any Supabase auth email would silently redirect to a dev URL. Now set to `https://portal.nextwavedev.org` with the production domain also added to the Redirect URLs allow-list. Separately, Supabase Authentication → SMTP Settings had no custom SMTP configured, so Supabase-generated auth emails were going through Supabase's own rate-limited built-in sender rather than Resend — now configured with Resend as custom SMTP. Full history in `docs/outside_work.md`.
+
+---
+
 ## Proposal-to-Project Lifecycle
 
 This is the core workflow the platform is built around. The current implementation is partially complete — the proposal submission and the admin approval exist as separate surfaces that are not yet fully connected end-to-end.
@@ -359,4 +388,4 @@ For contributors picking up new issues, the following parts of the intended arch
 
 ---
 
-*Last updated: [Update on commit]*
+*Last updated: 2026-07-23*
