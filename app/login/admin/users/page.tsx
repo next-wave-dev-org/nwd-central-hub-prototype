@@ -5,17 +5,9 @@ import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import SendMessageModal from '@/components/SendMessageModal'
 import { useAuth } from '@/components/AuthProvider'
-import { supabase } from '@/lib/supabase'
 import { createUser } from './create/actions'
 import { getUsers, resetUserPassword, deleteUser, updateUser } from './actions'
 import type { UserRole, UserProfile } from '@/types/auth'
-
-type SentMessage = {
-  id: string
-  content: string
-  created_at: string
-  recipient: { name: string | null; email: string; role: UserRole } | null
-}
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 0] // 0 = All
 
@@ -105,12 +97,6 @@ function ManageUsersContent() {
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null)
   const [messagingUser, setMessagingUser] = useState<UserProfile | null>(null)
 
-  // ── Messages panel ──
-  const [sentMessages, setSentMessages] = useState<SentMessage[]>([])
-  const [loadingSent, setLoadingSent] = useState(true)
-  const [sentError, setSentError] = useState<string | null>(null)
-  const [showNewMessageModal, setShowNewMessageModal] = useState(false)
-
   // ── Table controls ──
   const [searchRaw, setSearchRaw] = useState('')
   const [search, setSearch] = useState('')
@@ -146,27 +132,7 @@ function ManageUsersContent() {
     setLoadingUsers(false)
   }, [])
 
-  const fetchSentMessages = useCallback(async () => {
-    setLoadingSent(true)
-    setSentError(null)
-    const { data, error } = await supabase
-      .from('direct_messages')
-      .select('id, content, created_at, recipient:profiles!recipient_id(name, email, role)')
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    if (error) {
-      setSentError(error.message)
-      setLoadingSent(false)
-      return
-    }
-
-    setSentMessages((data as unknown as SentMessage[]) || [])
-    setLoadingSent(false)
-  }, [])
-
   useEffect(() => { loadUsers() }, [loadUsers])
-  useEffect(() => { fetchSentMessages() }, [fetchSentMessages])
   useEffect(() => { setPage(0) }, [search, sortCol, sortDir])
   useEffect(() => { setPage(0) }, [pageSize])
 
@@ -328,70 +294,6 @@ function ManageUsersContent() {
 
       <main className="flex-1 px-6 py-10">
         <div className="max-w-5xl mx-auto flex flex-col gap-10">
-
-          {/* ── Messages ── */}
-          <section>
-            <div className="mb-6 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}>MESSAGES</p>
-                <h2 className="text-2xl font-bold text-gray-900">Send a direct message</h2>
-              </div>
-              <button
-                onClick={() => setShowNewMessageModal(true)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer flex-shrink-0"
-                style={{ background: 'var(--nwd-teal)' }}
-              >
-                New Message
-              </button>
-            </div>
-
-            {sentError && (
-              <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
-                <span>{sentError}</span>
-                <button onClick={() => setSentError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
-              </div>
-            )}
-
-            {loadingSent ? (
-              <div className="flex items-center justify-center py-10">
-                <div className="w-6 h-6 rounded-full border-[3px] border-gray-200 border-t-gray-600 animate-spin" />
-              </div>
-            ) : sentMessages.length === 0 ? (
-              <div className="text-center py-10">
-                <p className="text-gray-400 text-sm">No messages sent yet.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {sentMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className="border rounded-lg p-4 flex flex-col gap-1.5"
-                    style={{ borderColor: 'var(--nwd-border)' }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {msg.recipient?.name ?? msg.recipient?.email ?? 'Unknown recipient'}
-                      </span>
-                      <span className="text-xs text-gray-300">
-                        {new Date(msg.created_at).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap line-clamp-2">
-                      {msg.content}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* ── Divider ── */}
-          <hr style={{ borderColor: 'var(--nwd-border)' }} />
 
           {/* ── Create User ── */}
           <section>
@@ -620,6 +522,16 @@ function ManageUsersContent() {
                                   <span className="text-xs text-gray-400 mr-1" style={{ fontFamily: 'var(--font-geist-mono)' }}>
                                     {user.name ?? user.email}
                                   </span>
+                                  {user.role !== 'admin' && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setMessagingUser(user) }}
+                                      disabled={anyBusy}
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                      style={{ borderColor: 'var(--nwd-teal)', color: 'var(--nwd-teal)', background: 'color-mix(in srgb, var(--nwd-teal) 8%, white)' }}
+                                    >
+                                      Message
+                                    </button>
+                                  )}
                                   {isPending && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleReset(user) }}
@@ -638,16 +550,6 @@ function ManageUsersContent() {
                                       style={{ borderColor: 'var(--nwd-purple)', color: isResetting ? '#6b7280' : 'var(--nwd-purple)', background: isResetting ? 'color-mix(in srgb, #6b7280 8%, white)' : 'color-mix(in srgb, var(--nwd-purple) 8%, white)' }}
                                     >
                                       {isResetting ? 'Sending…' : 'Reset Password'}
-                                    </button>
-                                  )}
-                                  {user.role !== 'admin' && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setMessagingUser(user) }}
-                                      disabled={anyBusy}
-                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
-                                      style={{ borderColor: 'var(--nwd-purple)', color: 'var(--nwd-purple)', background: 'color-mix(in srgb, var(--nwd-purple) 8%, white)' }}
-                                    >
-                                      Message
                                     </button>
                                   )}
                                   {!isEditing && (
@@ -751,20 +653,12 @@ function ManageUsersContent() {
       {messagingUser && (messagingUser.role === 'client' || messagingUser.role === 'contractor') && (
         <SendMessageModal
           onClose={() => setMessagingUser(null)}
-          onSent={fetchSentMessages}
-          presetRecipient={{
+          recipient={{
             id: messagingUser.id,
             name: messagingUser.name ?? null,
             email: messagingUser.email,
             role: messagingUser.role,
           }}
-        />
-      )}
-
-      {showNewMessageModal && (
-        <SendMessageModal
-          onClose={() => setShowNewMessageModal(false)}
-          onSent={fetchSentMessages}
         />
       )}
 
