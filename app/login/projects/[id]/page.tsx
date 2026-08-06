@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
@@ -218,6 +218,7 @@ function ProjectWorkspaceContent() {
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const messageListRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -270,10 +271,19 @@ function ProjectWorkspaceContent() {
     }
   }, [id])
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    const el = messageListRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages])
+
+  const isUnassignedContractor =
+    !!project &&
+    profile?.role === 'contractor' &&
+    !project.contractor_projects.some((cp) => cp.contractor_id === profile.id)
+
+  const sendMessage = async () => {
     const content = newMessage.trim()
-    if (!content || !profile?.id) return
+    if (!content || !profile?.id || sending) return
 
     setSending(true)
     setSendError(null)
@@ -301,6 +311,18 @@ function ProjectWorkspaceContent() {
 
     if (data) {
       setMessages(data as unknown as ProjectMessage[])
+    }
+  }
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault()
+    sendMessage()
+  }
+
+  const handleMessageInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
     }
   }
 
@@ -373,7 +395,7 @@ function ProjectWorkspaceContent() {
               <div className="mb-5 bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Messages</p>
 
-                <div className="max-h-96 overflow-y-auto flex flex-col gap-4 mb-4 pr-1">
+                <div ref={messageListRef} className="max-h-96 overflow-y-auto flex flex-col gap-4 mb-4 pr-1">
                   {messages.length === 0 ? (
                     <p className="text-sm text-gray-400">Join project to view messages</p>
                   ) : (
@@ -406,66 +428,43 @@ function ProjectWorkspaceContent() {
                   )}
                 </div>
 
-                {sendError && (
-                  <div
-                    className="mb-3 rounded-lg p-3 border text-sm flex items-start justify-between gap-2"
-                    style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}
-                  >
-                    <span>{sendError}</span>
-                    <button onClick={() => setSendError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
-                  </div>
-                )}
+                {!isUnassignedContractor && (
+                  <>
+                    {sendError && (
+                      <div
+                        className="mb-3 rounded-lg p-3 border text-sm flex items-start justify-between gap-2"
+                        style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}
+                      >
+                        <span>{sendError}</span>
+                        <button onClick={() => setSendError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                      </div>
+                    )}
 
-                <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
-                  <textarea
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Write a message…"
-                    rows={3}
-                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 bg-white text-gray-900"
-                    style={{ borderColor: 'var(--nwd-border)', resize: 'vertical' }}
-                  />
-                  <button
-                    type="submit"
-                    disabled={sending || !newMessage.trim()}
-                    className="self-end rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
-                    style={{ background: 'var(--nwd-teal)' }}
-                  >
-                    {sending ? 'Sending…' : 'Send'}
-                  </button>
-                </form>
+                    <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
+                      <textarea
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={handleMessageInputKeyDown}
+                        placeholder="Write a message"
+                        rows={3}
+                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 bg-white text-gray-900"
+                        style={{ borderColor: 'var(--nwd-border)', resize: 'vertical' }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={sending || !newMessage.trim()}
+                        className="self-end rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+                        style={{ background: 'var(--nwd-teal)' }}
+                      >
+                        {sending ? 'Sending…' : 'Send'}
+                      </button>
+                    </form>
+                  </>
+                )}
               </div>
 
-              <div className="bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</p>
-                {project.description ? (
-                  <div className="text-sm text-gray-900 leading-relaxed">
-                    <DescriptionText text={project.description} />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-900">—</p>
-                )}
-
-                <div
-                  className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5 pt-5 border-t"
-                  style={{ borderColor: 'var(--nwd-border)' }}
-                >
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Budget</p>
-                    <p className="text-sm text-gray-900">{project.budget || '—'}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Created</p>
-                    <p className="text-sm text-gray-900">
-                      {new Date(project.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
-                    </p>
-                  </div>
-
+              <div className="mb-5 bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Client</p>
                     {project.client ? (
@@ -500,6 +499,38 @@ function ProjectWorkspaceContent() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <div className="bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
+                <div
+                  className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5 pb-5 border-b"
+                  style={{ borderColor: 'var(--nwd-border)' }}
+                >
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Budget</p>
+                    <p className="text-sm text-gray-900">{project.budget || '—'}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Created</p>
+                    <p className="text-sm text-gray-900">
+                      {new Date(project.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</p>
+                {project.description ? (
+                  <div className="text-sm text-gray-900 leading-relaxed">
+                    <DescriptionText text={project.description} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-900">—</p>
+                )}
               </div>
             </>
           )}

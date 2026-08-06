@@ -330,6 +330,29 @@ USING (public.is_my_project_client(id));
 CREATE POLICY "Authenticated users can view admin profiles"
 ON public.profiles FOR SELECT TO authenticated
 USING (role = 'admin');
+
+-- Found via #56 testing: a second contractor on the same project showed as
+-- "Unknown" in both the message thread and the Assigned Contractors panel —
+-- no prior policy let one contractor read another's profile, only
+-- client<->contractor and admin<->all were covered. Mirrors the same
+-- SECURITY DEFINER pattern, keyed off shared contractor_projects membership.
+CREATE OR REPLACE FUNCTION public.is_co_contractor(p_profile_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.contractor_projects cp1
+    JOIN public.contractor_projects cp2 ON cp2.project_id = cp1.project_id
+    WHERE cp1.contractor_id = auth.uid() AND cp2.contractor_id = p_profile_id
+  );
+$$;
+
+CREATE POLICY "Contractors can view co-contractor profiles on shared projects"
+ON public.profiles FOR SELECT TO authenticated
+USING (public.is_co_contractor(id));
 ```
 
 ---
@@ -372,6 +395,7 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 | SELECT | Admin | All rows |
 | SELECT | Client | Profiles of contractors assigned to their own projects — two policies: an undocumented pre-existing one (scoped through `proposal_requests` approval, per Path A) plus an additive one using `public.is_contractor_on_my_project()`, added to also cover admin-initiated projects (see "Two Creation Paths" under `projects` above) |
 | SELECT | Contractor | Profile of the client on their assigned project(s), via `public.is_my_project_client()` (#56) |
+| SELECT | Contractor | Profiles of co-contractors on shared projects, via `public.is_co_contractor()` (#56) |
 | SELECT | Any authenticated user | Profiles with `role = 'admin'` (#56 — needed so admin senders are identified in the project message thread) |
 | INSERT | Server action only | Via `supabaseAdmin` in `createUser` — not client-initiated |
 | UPDATE | Authenticated user | Own row only |
@@ -478,7 +502,6 @@ Called from the client via `supabase.rpc('approve_contractor_request', { p_reque
 | NULL rows in `profiles` | Orphaned auth records from out-of-flow user creation | Future cleanup migration (non-blocking) |
 | `budget` has no numeric constraint | Freeform text — no validation beyond form `type="number"` | Post-MVP hardening |
 | Terminal status not enforced at DB level | `approved`/`rejected` proposals can be updated via direct SQL | Post-MVP hardening (CHECK constraint or trigger) |
-| Contractors can't see co-contractors' profiles | On a project with multiple contractors, one contractor's name renders "Unknown" to another contractor (in Assigned Contractors and the message thread) — no policy lets a contractor read another contractor's profile, only client↔contractor and admin↔all are covered | Pre-existing gap from #55, not addressed by #56 (single-contractor scenarios are unaffected). Needs a `profiles` SELECT policy for contractors keyed off shared `contractor_projects` membership |
 
 ---
 
