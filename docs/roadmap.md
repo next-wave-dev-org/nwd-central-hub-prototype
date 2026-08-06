@@ -126,7 +126,7 @@ Work that begins after the 8-step acceptance test passes in production.
 
 | Item | Notes |
 |------|-------|
-| #57 Admin-to-User Direct Messaging | ✅ Done — one-directional (no reply) DMs from admin to a specific contractor or client's dashboard. `direct_messages` table, a "Message" action (`SendMessageModal`) in each non-admin user's expanded row on the Manage Users page (`/login/admin/users`), plus a `DirectMessageInbox` component on client/contractor dashboards. Dashboard delivery only — email delivery (see taxonomy below) not yet implemented. |
+| #57 Admin-to-User Direct Messaging | ✅ Done — two-way DMs between admin and a specific contractor or client, with flat (one-level) reply threading via `direct_messages.thread_id`. Admins start conversations from a "Message" action on the Manage Users page (`/login/admin/users`); all roles read, reply to, delete, and bulk-mark-read their messages on the shared `/notifications` page (linked from the account dropdown), with an unread-count badge (`NotificationBell`) in the Navbar on every page. Dashboard delivery only — email delivery (see taxonomy below) not yet implemented. |
 | Email notifications for project events | Delivery via Resend (already wired); triggers listed below |
 | Real-time updates (Supabase Realtime) | Replace polling in the project thread; extend to dashboard activity feeds |
 | In-app notification inbox | Persistent bell/inbox for activity across all roles |

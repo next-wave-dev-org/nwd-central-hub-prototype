@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import UserMenu from '@/components/UserMenu'
+import NotificationBell from '@/components/NotificationBell'
 import { useAuth } from '@/components/AuthProvider'
 import { dashboardHref } from '@/lib/navigation'
 
@@ -72,6 +73,7 @@ export default function Navbar({ title, linkBrand = true }: NavbarProps) {
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
+            <NotificationBell />
             <UserMenu />
           </div>
         </div>

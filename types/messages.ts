@@ -5,5 +5,6 @@ export type DirectMessage = {
   read_at: string | null
   recipient_id: string
   sender_id: string
+  thread_id: string | null
   profiles: { name: string | null } | null
 }

@@ -249,24 +249,26 @@ created_at  timestamp  DEFAULT now()
 
 ## Table: `direct_messages`
 
-Admin-to-user direct messaging (#57). One-directional: an admin sends a private message to a single client or contractor, which lands on that recipient's dashboard. Deliberately separate from `project_messages` — not scoped to a project, not visible to any other user, and not a two-way thread (no reply UI; the recipient can only read and mark as read).
+Admin-to-user direct messaging (#57). An admin starts a conversation with a single client or contractor; the recipient can reply back (flat, one-level threading — replies don't nest further), delete messages from their own inbox, and mark them read individually or in bulk. Deliberately separate from `project_messages` — not scoped to a project, not visible to any other user.
 
 ```sql
 id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
 recipient_id  uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
 sender_id     uuid        NOT NULL REFERENCES profiles(id)
+thread_id     uuid        REFERENCES direct_messages(id) ON DELETE CASCADE
 content       text        NOT NULL
 read_at       timestamptz
 created_at    timestamptz NOT NULL DEFAULT now()
 ```
 
 **Notes:**
-- `sender_id` is always an admin (enforced by the INSERT policy's `get_my_role() = 'admin'` check), matching the `sender_id → profiles.id` convention used by `project_messages`.
-- `read_at` is `NULL` until the recipient opens/clicks the message, at which point the client sets it to `now()`. No column-level restriction stops a recipient from updating other columns on their own row via the same UPDATE policy — acceptable for MVP since only the dashboard inbox UI writes to this table (same trust level as the rest of the app's RLS-gated client writes).
-- No DELETE policy — messages are immutable except for the `read_at` transition.
-- Delivery is via polling refetch from the dashboard inbox, same `project_messages` precedent and the same reasoning (avoids subscription/connection-cleanup machinery for MVP; see that table's notes above).
+- A row with `thread_id IS NULL` is a **thread root** — a new conversation, currently only startable by an admin (enforced by the INSERT policy). A row with `thread_id` set is a **reply**, and always points at the root's `id`, never at another reply — so "which conversation is this" is always `thread_id ?? id`, a single lookup, with no arbitrary-depth tree to reconstruct.
+- A reply's `recipient_id`/`sender_id` are the mirror of the message it's replying to (reply `recipient_id` = root's `sender_id`). There's no separate "participants" concept — a conversation is just the set of rows sharing a `thread_id ?? id`.
+- `read_at` is `NULL` until the recipient opens it or uses "mark all as read," at which point the client sets it to `now()`. Same MVP trust-level note as before: no column-level restriction beyond the UPDATE policy's row-ownership check.
+- Deleting a message removes the row entirely — recipient-only permission, and since a message is a single row shared by both parties, the sender's view of that message disappears too. No per-party soft-delete; acceptable simple behavior for MVP.
+- Delivery is via polling refetch (`/notifications` page and the Navbar unread-count badge), same `project_messages` precedent and reasoning (avoids subscription/connection-cleanup machinery for MVP).
 
-**Migration (apply by hand — see `docs/DEVELOPER.md` §10):**
+**Initial migration (apply by hand — see `docs/DEVELOPER.md` §10):**
 
 ```sql
 CREATE TABLE public.direct_messages (
@@ -287,23 +289,75 @@ ALTER TABLE public.direct_messages ENABLE ROW LEVEL SECURITY;
 -- which is what normally auto-grants this (same gotcha as project_messages).
 GRANT SELECT, INSERT, UPDATE ON public.direct_messages TO authenticated;
 
--- Recipients read their own inbox; admins (the sending party as a whole,
--- same "admin sees all" convention as profiles/users management) read
--- everything for sent-message visibility.
-CREATE POLICY "Recipients and admins can view direct messages"
-ON public.direct_messages FOR SELECT TO authenticated
-USING (recipient_id = auth.uid() OR public.get_my_role() = 'admin');
-
--- Only admins can send, and only as themselves.
-CREATE POLICY "Admins can send direct messages"
-ON public.direct_messages FOR INSERT TO authenticated
-WITH CHECK (sender_id = auth.uid() AND public.get_my_role() = 'admin');
-
 -- Recipient marks their own message read.
 CREATE POLICY "Recipients can mark their messages read"
 ON public.direct_messages FOR UPDATE TO authenticated
 USING (recipient_id = auth.uid())
 WITH CHECK (recipient_id = auth.uid());
+```
+
+**Follow-up migration — replies, delete (apply by hand):**
+
+```sql
+ALTER TABLE public.direct_messages
+  ADD COLUMN thread_id uuid REFERENCES public.direct_messages(id) ON DELETE CASCADE;
+
+GRANT DELETE ON public.direct_messages TO authenticated;
+
+DROP POLICY IF EXISTS "Recipients and admins can view direct messages" ON public.direct_messages;
+DROP POLICY IF EXISTS "Admins can send direct messages" ON public.direct_messages;
+
+-- Mirrors get_my_role()/is_project_client() — SECURITY DEFINER lets the
+-- INSERT check look up the root message's row without re-triggering this
+-- table's own policies.
+CREATE OR REPLACE FUNCTION public.is_direct_message_recipient(p_message_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.direct_messages
+    WHERE id = p_message_id AND recipient_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.direct_message_sender(p_message_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT sender_id FROM public.direct_messages WHERE id = p_message_id;
+$$;
+
+-- SELECT: you can see anything you sent or received (needed so your own
+-- replies show up when you revisit later), plus admins see everything.
+CREATE POLICY "Participants and admins can view direct messages"
+ON public.direct_messages FOR SELECT TO authenticated
+USING (recipient_id = auth.uid() OR sender_id = auth.uid() OR public.get_my_role() = 'admin');
+
+-- INSERT: admins can start or reply to anything. Non-admins can only reply
+-- (thread_id required) within a thread that was sent to them, and only back
+-- to that thread's original sender.
+CREATE POLICY "Admins send freely; recipients reply within their thread"
+ON public.direct_messages FOR INSERT TO authenticated
+WITH CHECK (
+  sender_id = auth.uid()
+  AND (
+    public.get_my_role() = 'admin'
+    OR (
+      thread_id IS NOT NULL
+      AND public.is_direct_message_recipient(thread_id)
+      AND recipient_id = public.direct_message_sender(thread_id)
+    )
+  )
+);
+
+-- DELETE: recipient-only, own copy of the message.
+CREATE POLICY "Recipients can delete their messages"
+ON public.direct_messages FOR DELETE TO authenticated
+USING (recipient_id = auth.uid());
 ```
 
 ---
@@ -389,10 +443,12 @@ Policies will be defined when the table is created in #40. Planned: admin full a
 
 | Operation | Who | Policy |
 |---|---|---|
-| SELECT | Recipient | Own messages only (`recipient_id = auth.uid()`) |
+| SELECT | Sender or recipient | Rows where you're either party |
 | SELECT | Admin | All rows |
-| INSERT | Admin | Own sends only (`sender_id = auth.uid()`) |
+| INSERT | Admin | Any thread, own sends only (`sender_id = auth.uid()`) |
+| INSERT | Non-admin | Reply-only: `thread_id` must reference a message sent to them, and `recipient_id` must be that thread's original sender |
 | UPDATE | Recipient | Own rows only (used to set `read_at`) |
+| DELETE | Recipient | Own rows only |
 
 ---
 

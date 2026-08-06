@@ -130,12 +130,13 @@ created_at  timestamptz DEFAULT now()
 
 ### `direct_messages`
 
-One-directional admin-to-user messaging (#57). An admin sends a message to a single client or contractor; it lands in a `DirectMessageInbox` component on that user's dashboard. Not scoped to a project and not a reply-able thread -- see `docs/database-schema.md` for the full migration, RLS policies, and rationale.
+Admin-to-user messaging (#57), with replies. An admin starts a conversation with a single client or contractor; the recipient can reply, delete, and mark read from the shared `/notifications` page (also surfaced as an unread-count badge in the Navbar, via `components/NotificationBell.tsx`). Not scoped to a project. Threading is flat -- a reply's `thread_id` always points at the conversation's root message, never at another reply -- see `docs/database-schema.md` for the full migration, RLS policies, and rationale.
 
 ```sql
 id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
 recipient_id  uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
 sender_id     uuid        NOT NULL REFERENCES profiles(id)
+thread_id     uuid        REFERENCES direct_messages(id) ON DELETE CASCADE
 content       text        NOT NULL
 read_at       timestamptz
 created_at    timestamptz NOT NULL DEFAULT now()
@@ -206,6 +207,31 @@ $$;
 ```
 
 If this function ever throws `relation "public.users" does not exist`, the function body has been reset or re-created pointing at the old pre-rename table. Re-run the above to fix it. This is what caused the PostgREST error on the proposal review page prior to PR #54.
+
+`direct_messages` replies (#57) use two more helpers of the same shape, needed because the INSERT check on a reply has to look up the *root* message's row -- a second row on the same table -- without re-triggering that table's own SELECT policy:
+
+```sql
+CREATE OR REPLACE FUNCTION public.is_direct_message_recipient(p_message_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.direct_messages
+    WHERE id = p_message_id AND recipient_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.direct_message_sender(p_message_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT sender_id FROM public.direct_messages WHERE id = p_message_id;
+$$;
+```
 
 ---
 
