@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal from '@/components/Modal'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
@@ -14,16 +14,24 @@ type Recipient = {
 
 type SendMessageModalProps = {
   onClose: () => void
-  onSent?: () => void
   recipient: Recipient
 }
 
-export default function SendMessageModal({ onClose, onSent, recipient }: SendMessageModalProps) {
+const CLOSE_DELAY_MS = 2000
+
+export default function SendMessageModal({ onClose, recipient }: SendMessageModalProps) {
   const { profile } = useAuth()
 
   const [content, setContent] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
+
+  useEffect(() => {
+    if (!sent) return
+    const timer = setTimeout(onClose, CLOSE_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [sent, onClose])
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault()
@@ -45,8 +53,26 @@ export default function SendMessageModal({ onClose, onSent, recipient }: SendMes
       return
     }
 
-    onSent?.()
-    onClose()
+    setSending(false)
+    setSent(true)
+  }
+
+  if (sent) {
+    return (
+      <Modal title="New Message" onClose={onClose}>
+        <div className="flex flex-col items-center gap-3 py-6">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: 'color-mix(in srgb, var(--nwd-teal) 15%, transparent)' }}
+          >
+            <svg className="w-5 h-5" style={{ color: 'var(--nwd-teal)' }} fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l3.5 3.5L13 5" />
+            </svg>
+          </div>
+          <p className="text-sm font-semibold text-gray-900">Message sent</p>
+        </div>
+      </Modal>
+    )
   }
 
   return (
