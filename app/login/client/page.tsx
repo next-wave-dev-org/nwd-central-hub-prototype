@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
+import DirectMessageInbox from '@/components/DirectMessageInbox'
 
 const clientItems = [
   {
@@ -36,6 +37,8 @@ function ClientDashboardContent() {
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-14">
         <div className="w-full max-w-md">
+
+          <DirectMessageInbox />
 
           <div className="mb-10">
             <p

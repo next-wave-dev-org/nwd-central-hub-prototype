@@ -128,6 +128,19 @@ content     text       NOT NULL
 created_at  timestamptz DEFAULT now()
 ```
 
+### `direct_messages`
+
+One-directional admin-to-user messaging (#57). An admin sends a message to a single client or contractor; it lands in a `DirectMessageInbox` component on that user's dashboard. Not scoped to a project and not a reply-able thread -- see `docs/database-schema.md` for the full migration, RLS policies, and rationale.
+
+```sql
+id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+recipient_id  uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
+sender_id     uuid        NOT NULL REFERENCES profiles(id)
+content       text        NOT NULL
+read_at       timestamptz
+created_at    timestamptz NOT NULL DEFAULT now()
+```
+
 ---
 
 ## 3. Proposal and Project Helpers (`lib/proposals.ts`)

@@ -18,6 +18,7 @@ Read this alongside `docs/architecture.md`, which covers how these tables are qu
 | `contractor_projects` | ✅ Complete | Join table linking contractors to projects |
 | `proposal_requests` | ❌ Not built | Contractor request-to-join flow — pending #40 |
 | `project_messages` | ❌ Not built | In-project messaging — pending #56 |
+| `direct_messages` | ✅ Complete | Admin-to-user direct messaging (#57) |
 
 ---
 
@@ -246,6 +247,67 @@ created_at  timestamp  DEFAULT now()
 
 ---
 
+## Table: `direct_messages`
+
+Admin-to-user direct messaging (#57). One-directional: an admin sends a private message to a single client or contractor, which lands on that recipient's dashboard. Deliberately separate from `project_messages` — not scoped to a project, not visible to any other user, and not a two-way thread (no reply UI; the recipient can only read and mark as read).
+
+```sql
+id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+recipient_id  uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
+sender_id     uuid        NOT NULL REFERENCES profiles(id)
+content       text        NOT NULL
+read_at       timestamptz
+created_at    timestamptz NOT NULL DEFAULT now()
+```
+
+**Notes:**
+- `sender_id` is always an admin (enforced by the INSERT policy's `get_my_role() = 'admin'` check), matching the `sender_id → profiles.id` convention used by `project_messages`.
+- `read_at` is `NULL` until the recipient opens/clicks the message, at which point the client sets it to `now()`. No column-level restriction stops a recipient from updating other columns on their own row via the same UPDATE policy — acceptable for MVP since only the dashboard inbox UI writes to this table (same trust level as the rest of the app's RLS-gated client writes).
+- No DELETE policy — messages are immutable except for the `read_at` transition.
+- Delivery is via polling refetch from the dashboard inbox, same `project_messages` precedent and the same reasoning (avoids subscription/connection-cleanup machinery for MVP; see that table's notes above).
+
+**Migration (apply by hand — see `docs/DEVELOPER.md` §10):**
+
+```sql
+CREATE TABLE public.direct_messages (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  sender_id    uuid NOT NULL REFERENCES public.profiles(id),
+  content      text NOT NULL,
+  read_at      timestamptz,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ON public.direct_messages (recipient_id, created_at);
+
+ALTER TABLE public.direct_messages ENABLE ROW LEVEL SECURITY;
+
+-- Base table-level privilege — RLS policies alone are not enough. Needed
+-- because this table was created via raw SQL rather than the dashboard,
+-- which is what normally auto-grants this (same gotcha as project_messages).
+GRANT SELECT, INSERT, UPDATE ON public.direct_messages TO authenticated;
+
+-- Recipients read their own inbox; admins (the sending party as a whole,
+-- same "admin sees all" convention as profiles/users management) read
+-- everything for sent-message visibility.
+CREATE POLICY "Recipients and admins can view direct messages"
+ON public.direct_messages FOR SELECT TO authenticated
+USING (recipient_id = auth.uid() OR public.get_my_role() = 'admin');
+
+-- Only admins can send, and only as themselves.
+CREATE POLICY "Admins can send direct messages"
+ON public.direct_messages FOR INSERT TO authenticated
+WITH CHECK (sender_id = auth.uid() AND public.get_my_role() = 'admin');
+
+-- Recipient marks their own message read.
+CREATE POLICY "Recipients can mark their messages read"
+ON public.direct_messages FOR UPDATE TO authenticated
+USING (recipient_id = auth.uid())
+WITH CHECK (recipient_id = auth.uid());
+```
+
+---
+
 ## Relationships
 
 ```
@@ -265,7 +327,9 @@ auth.users
             │
             ├── proposal_requests (contractor_id → profiles.id)  [not built]
             │
-            └── project_messages (sender_id → profiles.id)  [not built]
+            ├── project_messages (sender_id → profiles.id)  [not built]
+            │
+            └── direct_messages (sender_id → profiles.id, recipient_id → profiles.id)
 ```
 
 ---
@@ -320,6 +384,15 @@ Policies will be defined when the table is created in #40. Planned: admin full a
 | SELECT | Contractor | Own rows only |
 | SELECT | Client | Contractors assigned to their projects — two policies: original (via `proposal_requests` approval) plus an additive one using `public.is_project_client()` (a `SECURITY DEFINER` helper, see "Two Creation Paths" above), added to also cover admin-initiated projects without recursing into the `projects` table's own contractor-visibility policy |
 | INSERT | Admin | Via server action only |
+
+### `direct_messages`
+
+| Operation | Who | Policy |
+|---|---|---|
+| SELECT | Recipient | Own messages only (`recipient_id = auth.uid()`) |
+| SELECT | Admin | All rows |
+| INSERT | Admin | Own sends only (`sender_id = auth.uid()`) |
+| UPDATE | Recipient | Own rows only (used to set `read_at`) |
 
 ---
 

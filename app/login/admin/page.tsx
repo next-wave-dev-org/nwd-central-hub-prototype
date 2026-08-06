@@ -40,6 +40,13 @@ const adminItems = [
     accent: 'var(--nwd-purple)',
     tag: 'PROJECTS',
   },
+  {
+    href: '/login/admin/messages',
+    label: 'Messages',
+    description: 'Send a direct message to a client or contractor',
+    accent: 'var(--nwd-sky)',
+    tag: 'MESSAGES',
+  },
 ]
 
 function AdminDashboardContent() {
