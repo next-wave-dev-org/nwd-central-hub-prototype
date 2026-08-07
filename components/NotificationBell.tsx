@@ -18,7 +18,7 @@ export default function NotificationBell() {
 
     const fetchCount = async () => {
       const { count: unread } = await supabase
-        .from('direct_messages')
+        .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('recipient_id', profile.id)
         .is('read_at', null)

@@ -4,7 +4,7 @@ This document describes the deployed database schema for the NWD Central Hub: ta
 
 Read this alongside `docs/architecture.md`, which covers how these tables are queried and how RLS interacts with the two Supabase clients.
 
-> **This document reflects the schema as of the merge of PR #54 ([#54] Admin Proposal Review Page & Lifecycle Automation).** Tables not yet built are marked with their blocking issue. `docs/database-setup.md` is superseded by this document and should be deleted.
+> **This document reflects the schema through the Notifications System migration (#57 follow-up).** Tables not yet built are marked with their blocking issue. `docs/database-setup.md` is superseded by this document and should be deleted.
 
 ---
 
@@ -16,9 +16,11 @@ Read this alongside `docs/architecture.md`, which covers how these tables are qu
 | `proposals` | ✅ Complete | Project proposals submitted by clients |
 | `projects` | ✅ Complete (as of PR #54) | Approved proposals promoted to projects |
 | `contractor_projects` | ✅ Complete | Join table linking contractors to projects |
-| `proposal_requests` | ❌ Not built | Contractor request-to-join flow — pending #40 |
-| `project_messages` | ❌ Not built | In-project messaging — pending #56 |
-| `direct_messages` | ✅ Complete | Admin-to-user direct messaging (#57) |
+| `proposal_requests` | ✅ Complete | Contractor request-to-join flow (#40) — doc corrected, table was already live |
+| `project_messages` | ✅ Complete | In-project messaging (#56, re-implemented) |
+| `direct_messages` | ✅ Complete | Admin-to-user direct messaging (#57), with replies |
+| `notifications` | ✅ Complete | Unified in-app notification feed — DMs, announcements, system events |
+| `announcements` | ✅ Complete | Admin-authored, role-targeted broadcast messages |
 
 ---
 
@@ -213,11 +215,9 @@ assigned_at     timestamptz
 
 ---
 
-## Table: `proposal_requests` ❌ Not Built
+## Table: `proposal_requests`
 
-Required for the contractor request-to-join flow (#40). Does not exist yet.
-
-**Planned schema:**
+Contractor request-to-join flow (#40). **Correction:** this section previously read "❌ Not Built" — that was stale; the table has been live since #40 shipped (`app/login/contractor/page.tsx`'s `requestAccess`, `app/login/admin/requests/page.tsx`). Fixed here while adding the notification trigger below, since documenting a trigger on a table marked "does not exist" would be self-contradictory.
 
 ```sql
 id              uuid       PRIMARY KEY DEFAULT gen_random_uuid()
@@ -227,23 +227,31 @@ status          text       CHECK (status IN ('pending', 'approved', 'rejected'))
 created_at      timestamptz DEFAULT now()
 ```
 
-**Note:** References `project_id`, not `proposal_id`. A project row exists by the time a contractor makes a request (project is created at proposal approval), so `project_id` is always available. The contractor dashboard (#40) must join through `projects` to get proposal details for display.
+**Note:** References `project_id`, not `proposal_id`. A project row exists by the time a contractor makes a request (project is created at proposal approval), so `project_id` is always available. The contractor dashboard must join through `projects` to get proposal details for display.
+
+As of the Notifications System migration (see below), INSERT notifies all admins, and `status` → `rejected` notifies the requesting contractor. `status` → `approved` is deliberately *not* separately notified here — it's covered by the `contractor_projects` INSERT trigger, which always fires immediately after approval in `approveRequest`.
 
 ---
 
-## Table: `project_messages` ❌ Not Built
+## Table: `project_messages`
 
-Required for in-project messaging (#56). Does not exist yet.
-
-**Planned schema:**
+In-project messaging (#56), re-implemented directly on this branch rather than merged from the unmerged `56-project-thread-messaging` branch (that branch had diverged too far — 20 commits including unrelated OAuth/settings work — for a clean merge; this table/UI was authored fresh, using that branch's design as a reference only). One thread per project, shared by the client, assigned contractor(s), and any admin.
 
 ```sql
-id          uuid       PRIMARY KEY DEFAULT gen_random_uuid()
-project_id  uuid       NOT NULL REFERENCES projects(id)
-sender_id   uuid       NOT NULL REFERENCES profiles(id)
-content     text       NOT NULL
-created_at  timestamp  DEFAULT now()
+id          uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+project_id  uuid        NOT NULL REFERENCES projects(id) ON DELETE CASCADE
+sender_id   uuid        NOT NULL REFERENCES profiles(id)
+content     text        NOT NULL
+created_at  timestamptz NOT NULL DEFAULT now()
 ```
+
+**Notes:**
+- No `read_at`/title — this is a live shared thread on the project workspace page (`/login/projects/[id]`), not an inbox item; unlike `direct_messages`, nobody "owns" a read state on someone else's project chat.
+- RLS reuses the existing `is_project_client()` helper (see "Two Creation Paths" under `projects` above) plus a new, analogous `is_project_contractor()` helper.
+- INSERT notifies every *other* project member (client + all assigned contractors, excluding the sender) via the `notifications` table, with a link back to `/login/projects/<id>` — see the Notifications System migration below.
+- Delivery to the thread itself is via polling (8s), same reasoning as every other messaging feature in this app (avoids subscription/connection-cleanup machinery for MVP).
+
+Full migration SQL is in the **Notifications System Migration** section below (it depends on `notifications`, which is created first).
 
 ---
 
@@ -256,17 +264,17 @@ id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
 recipient_id  uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
 sender_id     uuid        NOT NULL REFERENCES profiles(id)
 thread_id     uuid        REFERENCES direct_messages(id) ON DELETE CASCADE
+title         text        NOT NULL DEFAULT 'Message'
 content       text        NOT NULL
-read_at       timestamptz
 created_at    timestamptz NOT NULL DEFAULT now()
 ```
 
 **Notes:**
 - A row with `thread_id IS NULL` is a **thread root** — a new conversation, currently only startable by an admin (enforced by the INSERT policy). A row with `thread_id` set is a **reply**, and always points at the root's `id`, never at another reply — so "which conversation is this" is always `thread_id ?? id`, a single lookup, with no arbitrary-depth tree to reconstruct.
 - A reply's `recipient_id`/`sender_id` are the mirror of the message it's replying to (reply `recipient_id` = root's `sender_id`). There's no separate "participants" concept — a conversation is just the set of rows sharing a `thread_id ?? id`.
-- `read_at` is `NULL` until the recipient opens it or uses "mark all as read," at which point the client sets it to `now()`. Same MVP trust-level note as before: no column-level restriction beyond the UPDATE policy's row-ownership check.
-- Deleting a message removes the row entirely — recipient-only permission, and since a message is a single row shared by both parties, the sender's view of that message disappears too. No per-party soft-delete; acceptable simple behavior for MVP.
-- Delivery is via polling refetch (`/notifications` page and the Navbar unread-count badge), same `project_messages` precedent and reasoning (avoids subscription/connection-cleanup machinery for MVP).
+- `title` is required for a new thread (entered in `SendMessageModal`); a reply's title is computed client-side as `'Re: ' + rootTitle` rather than user-entered, keeping the reply UI to just a body field.
+- **`read_at` was removed** (Notifications System migration below) — read/unread/pinned/deleted state all moved to the `notifications` table, one level up. `direct_messages` is now pure append-only content: the client only ever `INSERT`s into it; everything it needs to *display* (title, body, sender, thread root) is denormalized onto the recipient's `notifications` row by a trigger at insert time, so the client never has to `SELECT` this table directly.
+- Delivery is via polling refetch on `/notifications` and the Navbar unread-count badge (which both read `notifications`, not this table), same reasoning as `project_messages` (avoids subscription/connection-cleanup machinery for MVP).
 
 **Initial migration (apply by hand — see `docs/DEVELOPER.md` §10):**
 
@@ -360,6 +368,436 @@ ON public.direct_messages FOR DELETE TO authenticated
 USING (recipient_id = auth.uid());
 ```
 
+**This UPDATE policy and the DELETE policy above are both superseded by the Notifications System migration below**, which drops them (read/pin/delete state moves to `notifications`) — apply that migration too, in order; don't stop here.
+
+---
+
+## Table: `notifications`
+
+The single unified in-app feed for every notification-worthy event in the app: direct messages (and replies), admin announcements, and system events (proposal/request/project lifecycle). Introduced alongside the reply/announcement/system-event work described in the migration below.
+
+```sql
+id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+recipient_id       uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
+sender_id          uuid        REFERENCES profiles(id)
+category           text        NOT NULL CHECK (category IN ('direct_message', 'announcement', 'system'))
+title              text        NOT NULL
+body               text        NOT NULL
+link               text
+direct_message_id  uuid        REFERENCES direct_messages(id) ON DELETE CASCADE
+thread_root_id     uuid
+announcement_id    uuid        REFERENCES announcements(id) ON DELETE CASCADE
+pinned_at          timestamptz
+read_at            timestamptz
+created_at         timestamptz NOT NULL DEFAULT now()
+```
+
+**Notes:**
+- **No `authenticated` INSERT grant at all.** Every row is written by a `SECURITY DEFINER` trigger function (see the migration below), which runs with the function owner's privileges regardless of the acting user's own grants — the same mechanism this codebase already uses to sidestep RLS recursion (`is_project_client()`, `get_my_role()`, etc.), applied here to close off "can a client forge a notification to another user" entirely, rather than trying to write an RLS policy that allows it safely.
+- `sender_id` is the acting user where one exists (message sender, the client who submitted a proposal, the contractor who requested/joined) and `NULL` for events with no natural single actor.
+- `link` is what the "View" control in the notifications UI navigates to — populated for `system` category rows; `direct_message` rows link back to `/notifications` itself (no page for an individual DM); `announcement` rows have no link (the full body is already shown inline, and it isn't repliable/navigable to anything).
+- `direct_message_id`/`thread_root_id` are populated only for `category = 'direct_message'` — `thread_root_id` lets Reply be built entirely from this row (`recipient_id` for the reply = this row's `sender_id`, `thread_id` for the reply = this row's `thread_root_id`) without a second query against `direct_messages`.
+- `announcement_id` is populated only for `category = 'announcement'`, and is how the admin read-receipt view (`get_announcement_read_receipts()`, below) groups the fan-out rows back together.
+- `pinned_at`/`read_at` are both nullable timestamps set by the client (`now()` to set, `NULL` to clear) — used for the pin toggle and mark read/unread respectively. Pinned items sort first in the UI.
+- Deleting a notification only removes that recipient's feed entry — it does not touch the underlying `direct_messages`/`announcements` row, so thread history and other recipients' copies of an announcement are unaffected.
+
+---
+
+## Table: `announcements`
+
+Admin-authored, role-targeted broadcast messages (not repliable). The content-once source of truth; delivery to individual recipients is a fan-out into `notifications` (one row per targeted profile), handled by a trigger — see the migration below.
+
+```sql
+id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+sender_id     uuid        NOT NULL REFERENCES profiles(id)
+title         text        NOT NULL
+body          text        NOT NULL
+target_roles  text[]      NOT NULL
+created_at    timestamptz NOT NULL DEFAULT now()
+```
+
+**Notes:**
+- `target_roles` is a subset of `{'admin', 'client', 'contractor'}` — any combination, chosen via checkboxes in the compose UI (`app/login/admin/announcements/page.tsx`).
+- Admin-only SELECT/INSERT. Non-admin recipients never query this table directly — they only ever see their own fanned-out `notifications` row (title/body copied over at send time).
+- Immutable once sent — no UPDATE/DELETE policy, matching the immutability convention used by `project_messages`/`direct_messages`.
+- Read receipts (who's read it, of how many) are exposed to admins via the `get_announcement_read_receipts(p_announcement_id)` RPC below, rather than broadening `notifications`' otherwise strictly-recipient-only SELECT policy.
+
+---
+
+## Notifications System Migration (apply by hand, in this order)
+
+This is one migration, ordered because later statements depend on earlier ones (`notifications` references both `direct_messages` and `announcements`; every trigger function references `notifications`).
+
+```sql
+-- 1. direct_messages: add title, retire read_at (state moves to notifications)
+ALTER TABLE public.direct_messages ADD COLUMN title text NOT NULL DEFAULT 'Message';
+ALTER TABLE public.direct_messages DROP COLUMN read_at;
+DROP POLICY IF EXISTS "Recipients can mark their messages read" ON public.direct_messages;
+DROP POLICY IF EXISTS "Recipients can delete their messages" ON public.direct_messages;
+REVOKE UPDATE, DELETE ON public.direct_messages FROM authenticated;
+
+-- 2. announcements
+CREATE TABLE public.announcements (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id    uuid NOT NULL REFERENCES public.profiles(id),
+  title        text NOT NULL,
+  body         text NOT NULL,
+  target_roles text[] NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT ON public.announcements TO authenticated;
+
+CREATE POLICY "Admins can view announcements"
+ON public.announcements FOR SELECT TO authenticated
+USING (public.get_my_role() = 'admin');
+
+CREATE POLICY "Admins can send announcements"
+ON public.announcements FOR INSERT TO authenticated
+WITH CHECK (sender_id = auth.uid() AND public.get_my_role() = 'admin');
+
+-- 3. notifications
+CREATE TABLE public.notifications (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_id       uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  sender_id          uuid REFERENCES public.profiles(id),
+  category           text NOT NULL CHECK (category IN ('direct_message', 'announcement', 'system')),
+  title              text NOT NULL,
+  body               text NOT NULL,
+  link               text,
+  direct_message_id  uuid REFERENCES public.direct_messages(id) ON DELETE CASCADE,
+  thread_root_id     uuid,
+  announcement_id    uuid REFERENCES public.announcements(id) ON DELETE CASCADE,
+  pinned_at          timestamptz,
+  read_at            timestamptz,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ON public.notifications (recipient_id, created_at);
+
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+-- No INSERT grant — every row is written by a SECURITY DEFINER trigger function.
+GRANT SELECT, UPDATE, DELETE ON public.notifications TO authenticated;
+
+CREATE POLICY "Recipients can view their own notifications"
+ON public.notifications FOR SELECT TO authenticated
+USING (recipient_id = auth.uid());
+
+CREATE POLICY "Recipients can update their own notifications"
+ON public.notifications FOR UPDATE TO authenticated
+USING (recipient_id = auth.uid())
+WITH CHECK (recipient_id = auth.uid());
+
+CREATE POLICY "Recipients can delete their own notifications"
+ON public.notifications FOR DELETE TO authenticated
+USING (recipient_id = auth.uid());
+
+-- 4. direct_messages -> notifications
+CREATE OR REPLACE FUNCTION public.notify_direct_message_recipient()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.notifications (
+    recipient_id, sender_id, category, title, body, link, direct_message_id, thread_root_id
+  ) VALUES (
+    NEW.recipient_id, NEW.sender_id, 'direct_message', NEW.title, NEW.content, '/notifications',
+    NEW.id, COALESCE(NEW.thread_id, NEW.id)
+  );
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_direct_message_recipient
+AFTER INSERT ON public.direct_messages
+FOR EACH ROW EXECUTE FUNCTION public.notify_direct_message_recipient();
+
+-- 5. announcements -> notifications (fan-out to every targeted role)
+CREATE OR REPLACE FUNCTION public.notify_announcement_recipients()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, announcement_id)
+  SELECT id, NEW.sender_id, 'announcement', NEW.title, NEW.body, NEW.id
+  FROM public.profiles
+  WHERE role = ANY(NEW.target_roles);
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_announcement_recipients
+AFTER INSERT ON public.announcements
+FOR EACH ROW EXECUTE FUNCTION public.notify_announcement_recipients();
+
+-- 6. admin read-receipt RPC (keeps notifications' SELECT policy strictly recipient-only)
+CREATE OR REPLACE FUNCTION public.get_announcement_read_receipts(p_announcement_id uuid)
+RETURNS TABLE (recipient_id uuid, name text, role text, read_at timestamptz)
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT n.recipient_id, p.name, p.role, n.read_at
+  FROM public.notifications n
+  JOIN public.profiles p ON p.id = n.recipient_id
+  WHERE n.announcement_id = p_announcement_id
+    AND public.get_my_role() = 'admin'
+  ORDER BY p.name;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_announcement_read_receipts(uuid) TO authenticated;
+
+-- 7. project_messages (re-implemented fresh; see the note under its table section above)
+CREATE TABLE public.project_messages (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id  uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  sender_id   uuid NOT NULL REFERENCES public.profiles(id),
+  content     text NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ON public.project_messages (project_id, created_at);
+
+ALTER TABLE public.project_messages ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT ON public.project_messages TO authenticated;
+
+-- Mirrors is_project_client() for the contractor side.
+CREATE OR REPLACE FUNCTION public.is_project_contractor(p_project_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.contractor_projects
+    WHERE project_id = p_project_id AND contractor_id = auth.uid()
+  );
+$$;
+
+CREATE POLICY "Project members can view messages"
+ON public.project_messages FOR SELECT TO authenticated
+USING (
+  public.is_project_client(project_id)
+  OR public.is_project_contractor(project_id)
+  OR public.get_my_role() = 'admin'
+);
+
+CREATE POLICY "Project members can post messages"
+ON public.project_messages FOR INSERT TO authenticated
+WITH CHECK (
+  sender_id = auth.uid()
+  AND (
+    public.is_project_client(project_id)
+    OR public.is_project_contractor(project_id)
+    OR public.get_my_role() = 'admin'
+  )
+);
+
+-- 8. project_messages -> notifications (every other project member)
+CREATE OR REPLACE FUNCTION public.notify_project_message_recipients()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_project_title text;
+  v_preview text;
+BEGIN
+  SELECT title INTO v_project_title FROM public.projects WHERE id = NEW.project_id;
+  v_preview := left(NEW.content, 140);
+
+  INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, link)
+  SELECT p.client_id, NEW.sender_id, 'system',
+         'New message in ' || COALESCE(v_project_title, 'a project'),
+         v_preview, '/login/projects/' || NEW.project_id
+  FROM public.projects p
+  WHERE p.id = NEW.project_id AND p.client_id IS NOT NULL AND p.client_id != NEW.sender_id;
+
+  INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, link)
+  SELECT cp.contractor_id, NEW.sender_id, 'system',
+         'New message in ' || COALESCE(v_project_title, 'a project'),
+         v_preview, '/login/projects/' || NEW.project_id
+  FROM public.contractor_projects cp
+  WHERE cp.project_id = NEW.project_id AND cp.contractor_id != NEW.sender_id;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_project_message_recipients
+AFTER INSERT ON public.project_messages
+FOR EACH ROW EXECUTE FUNCTION public.notify_project_message_recipients();
+
+-- 9. proposals -> notify all admins on submit
+CREATE OR REPLACE FUNCTION public.notify_admins_new_proposal()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, link)
+  SELECT id, NEW.client_id, 'system', 'New proposal submitted',
+         COALESCE(NEW.title, 'Untitled proposal'), '/login/admin/proposals'
+  FROM public.profiles WHERE role = 'admin';
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_admins_new_proposal
+AFTER INSERT ON public.proposals
+FOR EACH ROW EXECUTE FUNCTION public.notify_admins_new_proposal();
+
+-- 10. proposals -> notify client on approve/reject
+CREATE OR REPLACE FUNCTION public.notify_client_proposal_status()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.status IN ('approved', 'rejected') AND NEW.status IS DISTINCT FROM OLD.status THEN
+    INSERT INTO public.notifications (recipient_id, category, title, body, link)
+    VALUES (
+      NEW.client_id, 'system', 'Proposal ' || NEW.status,
+      COALESCE(NEW.title, 'Untitled proposal'), '/login/client/proposals'
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_client_proposal_status
+AFTER UPDATE OF status ON public.proposals
+FOR EACH ROW EXECUTE FUNCTION public.notify_client_proposal_status();
+
+-- 11. proposal_requests -> notify all admins on new request
+CREATE OR REPLACE FUNCTION public.notify_admins_new_request()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_project_title text;
+BEGIN
+  SELECT title INTO v_project_title FROM public.projects WHERE id = NEW.project_id;
+  INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, link)
+  SELECT id, NEW.contractor_id, 'system', 'New request to join a project',
+         COALESCE(v_project_title, 'A project'), '/login/admin/requests'
+  FROM public.profiles WHERE role = 'admin';
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_admins_new_request
+AFTER INSERT ON public.proposal_requests
+FOR EACH ROW EXECUTE FUNCTION public.notify_admins_new_request();
+
+-- 12. proposal_requests -> notify contractor on rejection
+-- (approval is covered by the contractor_projects INSERT trigger below, since
+-- approveRequest() always inserts that row immediately after approving)
+CREATE OR REPLACE FUNCTION public.notify_contractor_request_rejected()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_project_title text;
+BEGIN
+  IF NEW.status = 'rejected' AND NEW.status IS DISTINCT FROM OLD.status THEN
+    SELECT title INTO v_project_title FROM public.projects WHERE id = NEW.project_id;
+    INSERT INTO public.notifications (recipient_id, category, title, body, link)
+    VALUES (
+      NEW.contractor_id, 'system', 'Request declined',
+      'Your request to join ' || COALESCE(v_project_title, 'a project') || ' was declined.',
+      '/login/contractor'
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_contractor_request_rejected
+AFTER UPDATE OF status ON public.proposal_requests
+FOR EACH ROW EXECUTE FUNCTION public.notify_contractor_request_rejected();
+
+-- 13. contractor_projects -> notify the new contractor, the client, and existing contractors
+CREATE OR REPLACE FUNCTION public.notify_contractor_joined()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_project record;
+  v_contractor_name text;
+BEGIN
+  SELECT title, client_id INTO v_project FROM public.projects WHERE id = NEW.project_id;
+  SELECT name INTO v_contractor_name FROM public.profiles WHERE id = NEW.contractor_id;
+
+  INSERT INTO public.notifications (recipient_id, category, title, body, link)
+  VALUES (
+    NEW.contractor_id, 'system', 'You joined a project',
+    COALESCE(v_project.title, 'A project'), '/login/projects/' || NEW.project_id
+  );
+
+  IF v_project.client_id IS NOT NULL THEN
+    INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, link)
+    VALUES (
+      v_project.client_id, NEW.contractor_id, 'system', 'New contractor joined your project',
+      COALESCE(v_contractor_name, 'A contractor') || ' joined ' || COALESCE(v_project.title, 'your project'),
+      '/login/projects/' || NEW.project_id
+    );
+  END IF;
+
+  INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, link)
+  SELECT cp.contractor_id, NEW.contractor_id, 'system', 'New contractor joined your project',
+         COALESCE(v_contractor_name, 'A contractor') || ' joined ' || COALESCE(v_project.title, 'your project'),
+         '/login/projects/' || NEW.project_id
+  FROM public.contractor_projects cp
+  WHERE cp.project_id = NEW.project_id AND cp.contractor_id != NEW.contractor_id;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_contractor_joined
+AFTER INSERT ON public.contractor_projects
+FOR EACH ROW EXECUTE FUNCTION public.notify_contractor_joined();
+
+-- 14. projects -> notify assigned client (on creation, or later assignment)
+CREATE OR REPLACE FUNCTION public.notify_client_assigned()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.client_id IS NOT NULL AND (TG_OP = 'INSERT' OR OLD.client_id IS DISTINCT FROM NEW.client_id) THEN
+    INSERT INTO public.notifications (recipient_id, category, title, body, link)
+    VALUES (
+      NEW.client_id, 'system', 'You were assigned to a project',
+      COALESCE(NEW.title, 'A project'), '/login/projects/' || NEW.id
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_notify_client_assigned
+AFTER INSERT OR UPDATE OF client_id ON public.projects
+FOR EACH ROW EXECUTE FUNCTION public.notify_client_assigned();
+```
+
 ---
 
 ## Relationships
@@ -373,17 +811,23 @@ auth.users
             │       │
             │       └── projects (proposal_id → proposals.id)
             │               │
-            │               ├── project_messages (project_id → projects.id)  [not built]
-            │               ├── proposal_requests (project_id → projects.id)  [not built]
+            │               ├── project_messages (project_id → projects.id)
+            │               ├── proposal_requests (project_id → projects.id)
             │               └── contractor_projects (project_id → projects.id)
             │
             ├── contractor_projects (contractor_id → profiles.id)
             │
-            ├── proposal_requests (contractor_id → profiles.id)  [not built]
+            ├── proposal_requests (contractor_id → profiles.id)
             │
-            ├── project_messages (sender_id → profiles.id)  [not built]
+            ├── project_messages (sender_id → profiles.id)
             │
-            └── direct_messages (sender_id → profiles.id, recipient_id → profiles.id)
+            ├── direct_messages (sender_id → profiles.id, recipient_id → profiles.id)
+            │
+            ├── announcements (sender_id → profiles.id)
+            │
+            └── notifications (recipient_id → profiles.id, sender_id → profiles.id)
+                    ├── direct_message_id → direct_messages.id
+                    └── announcement_id → announcements.id
 ```
 
 ---
@@ -426,9 +870,14 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 | INSERT | Admin | Via `supabaseAdmin`, in either the `approveProposal` or `createProjectDirect` server action |
 | UPDATE | Admin | Any project |
 
-### `proposal_requests` (not yet built)
+### `proposal_requests`
 
-Policies will be defined when the table is created in #40. Planned: admin full access, contractor insert own, contractor view own.
+| Operation | Who | Policy |
+|---|---|---|
+| SELECT | Admin | All rows |
+| SELECT | Contractor | Own rows only |
+| INSERT | Contractor | Own rows only (`contractor_id = auth.uid()`) |
+| UPDATE | Admin | Status on any row (approve/reject) |
 
 ### `contractor_projects`
 
@@ -443,12 +892,33 @@ Policies will be defined when the table is created in #40. Planned: admin full a
 
 | Operation | Who | Policy |
 |---|---|---|
-| SELECT | Sender or recipient | Rows where you're either party |
+| SELECT | Sender or recipient | Rows where you're either party (client never needs this directly — see notes above) |
 | SELECT | Admin | All rows |
 | INSERT | Admin | Any thread, own sends only (`sender_id = auth.uid()`) |
 | INSERT | Non-admin | Reply-only: `thread_id` must reference a message sent to them, and `recipient_id` must be that thread's original sender |
-| UPDATE | Recipient | Own rows only (used to set `read_at`) |
-| DELETE | Recipient | Own rows only |
+| UPDATE, DELETE | — | Not permitted for anyone — retired in favor of `notifications`' read/pin/delete state |
+
+### `project_messages`
+
+| Operation | Who | Policy |
+|---|---|---|
+| SELECT, INSERT | Client | On their own projects (`is_project_client()`) |
+| SELECT, INSERT | Contractor | On projects they're assigned to (`is_project_contractor()`) |
+| SELECT, INSERT | Admin | Any project |
+
+### `announcements`
+
+| Operation | Who | Policy |
+|---|---|---|
+| SELECT, INSERT | Admin | All rows / own sends only (`sender_id = auth.uid()`) |
+| — | Everyone else | No direct access — recipients only ever see their fanned-out `notifications` row |
+
+### `notifications`
+
+| Operation | Who | Policy |
+|---|---|---|
+| SELECT, UPDATE, DELETE | Recipient | Own rows only |
+| INSERT | Nobody, directly | Every row is written by a `SECURITY DEFINER` trigger function — no `authenticated` INSERT grant exists on this table at all |
 
 ---
 
@@ -456,12 +926,10 @@ Policies will be defined when the table is created in #40. Planned: admin full a
 
 | Gap | Impact | Resolved by |
 |---|---|---|
-| `UserProfile` type missing `name` | TypeScript friction when workspace/messaging display user names | Add `name?: string` to `types/auth.ts` before #55/#56 |
-| `proposal_requests` table not built | Contractor self-service join flow blocked | #40 |
-| `project_messages` table not built | In-project messaging blocked | #56 |
 | NULL rows in `profiles` | Orphaned auth records from out-of-flow user creation | Future cleanup migration (non-blocking) |
 | `budget` has no numeric constraint | Freeform text — no validation beyond form `type="number"` | Post-MVP hardening |
 | Terminal status not enforced at DB level | `approved`/`rejected` proposals can be updated via direct SQL | Post-MVP hardening (CHECK constraint or trigger) |
+| No email delivery for notifications | All notification types (DM, announcement, system) are in-app only; the Settings "Email notifications" toggle is still a non-functional placeholder | Post-MVP — Resend is already wired for onboarding email and could be extended |
 
 ---
 

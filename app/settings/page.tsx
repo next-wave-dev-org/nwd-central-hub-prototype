@@ -61,8 +61,6 @@ function SettingsContent() {
 
   const [timezone, setTimezone] = useState(TIMEZONES[0])
   const [emailNotifications, setEmailNotifications] = useState(true)
-  const [pushNotifications, setPushNotifications] = useState(false)
-  const [smsNotifications, setSmsNotifications] = useState(false)
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -110,18 +108,6 @@ function SettingsContent() {
                   description="Project and account updates via email"
                   checked={emailNotifications}
                   onChange={setEmailNotifications}
-                />
-                <ToggleSwitch
-                  label="Push notifications"
-                  description="Alerts sent to your browser or device"
-                  checked={pushNotifications}
-                  onChange={setPushNotifications}
-                />
-                <ToggleSwitch
-                  label="SMS notifications"
-                  description="Text messages for urgent updates"
-                  checked={smsNotifications}
-                  onChange={setSmsNotifications}
                 />
               </div>
               <p className="text-xs text-gray-400 mt-2">Coming soon — notification preferences aren&apos;t saved yet.</p>

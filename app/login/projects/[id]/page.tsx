@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
+import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
+
+const MESSAGE_POLL_INTERVAL_MS = 8000
 
 type ContractorProject = {
   contractor_id: string
@@ -22,11 +25,31 @@ type Project = {
   contractor_projects: ContractorProject[]
 }
 
+type ProjectMessage = {
+  id: string
+  content: string
+  created_at: string
+  sender_id: string
+  profiles: { name: string | null; role: string | null } | null
+}
+
+function roleLabel(role: string | null | undefined): string {
+  if (!role) return ''
+  return role.charAt(0).toUpperCase() + role.slice(1)
+}
+
 function ProjectWorkspaceContent() {
   const { id } = useParams<{ id: string }>()
+  const { profile } = useAuth()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+
+  const [messages, setMessages] = useState<ProjectMessage[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const messageListRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -51,6 +74,82 @@ function ProjectWorkspaceContent() {
 
     fetchProject()
   }, [id])
+
+  useEffect(() => {
+    if (!id) return
+
+    let cancelled = false
+
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from('project_messages')
+        .select('id, content, created_at, sender_id, profiles!sender_id(name, role)')
+        .eq('project_id', id)
+        .order('created_at', { ascending: true })
+
+      if (!cancelled && data) {
+        setMessages(data as unknown as ProjectMessage[])
+      }
+    }
+
+    fetchMessages()
+    const intervalId = setInterval(fetchMessages, MESSAGE_POLL_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [id])
+
+  useEffect(() => {
+    const el = messageListRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages])
+
+  const sendMessage = async () => {
+    const content = newMessage.trim()
+    if (!content || !profile?.id || !id || sending) return
+
+    setSending(true)
+    setSendError(null)
+
+    const { error } = await supabase.from('project_messages').insert({
+      project_id: id,
+      sender_id: profile.id,
+      content,
+    })
+
+    if (error) {
+      setSendError(error.message)
+      setSending(false)
+      return
+    }
+
+    setNewMessage('')
+    setSending(false)
+
+    const { data } = await supabase
+      .from('project_messages')
+      .select('id, content, created_at, sender_id, profiles!sender_id(name, role)')
+      .eq('project_id', id)
+      .order('created_at', { ascending: true })
+
+    if (data) {
+      setMessages(data as unknown as ProjectMessage[])
+    }
+  }
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault()
+    sendMessage()
+  }
+
+  const handleMessageInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -159,6 +258,71 @@ function ProjectWorkspaceContent() {
                     </ul>
                   )}
                 </div>
+              </div>
+
+              <div className="bg-white rounded-lg border p-5 mt-5" style={{ borderColor: 'var(--nwd-border)' }}>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Messages</p>
+
+                <div ref={messageListRef} className="max-h-96 overflow-y-auto flex flex-col gap-4 mb-4 pr-1">
+                  {messages.length === 0 ? (
+                    <p className="text-sm text-gray-400">No messages yet. Say hello.</p>
+                  ) : (
+                    messages.map((message) => (
+                      <div key={message.id} className="text-sm">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-semibold text-gray-900">
+                            {message.profiles?.name ?? 'Unknown'}
+                          </span>
+                          {message.profiles?.role && (
+                            <span
+                              className="text-xs font-semibold tracking-wider px-1.5 py-0.5 rounded"
+                              style={{
+                                color: 'var(--nwd-teal)',
+                                background: 'color-mix(in srgb, var(--nwd-teal) 10%, transparent)',
+                                fontFamily: 'var(--font-geist-mono)',
+                              }}
+                            >
+                              {roleLabel(message.profiles.role)}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-300">
+                            {new Date(message.created_at).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-gray-900 leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {sendError && (
+                  <p className="text-sm mb-2" style={{ color: '#9f1239' }}>{sendError}</p>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
+                  <textarea
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={handleMessageInputKeyDown}
+                    placeholder="Write a message"
+                    rows={2}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 resize-none"
+                    style={{ borderColor: 'var(--nwd-border)' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sending || !newMessage.trim()}
+                    className="self-start px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: 'var(--nwd-teal)' }}
+                  >
+                    {sending ? 'Sending…' : 'Send'}
+                  </button>
+                </form>
               </div>
             </>
           )}

@@ -118,29 +118,64 @@ assigned_at     timestamptz
 
 ### `project_messages`
 
-In-project messaging. Not yet built -- pending #56.
+In-project messaging (#56), re-implemented fresh on this branch (see `docs/database-schema.md` for why this wasn't a git merge of the original unmerged branch). One thread per project; RLS via `is_project_client()`/`is_project_contractor()`/`get_my_role()`. Posting notifies every other project member through `notifications` (below).
 
 ```sql
-id          uuid       PRIMARY KEY DEFAULT gen_random_uuid()
-project_id  uuid       NOT NULL REFERENCES projects(id)
-sender_id   uuid       NOT NULL REFERENCES profiles(id)
-content     text       NOT NULL
-created_at  timestamptz DEFAULT now()
+id          uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+project_id  uuid        NOT NULL REFERENCES projects(id) ON DELETE CASCADE
+sender_id   uuid        NOT NULL REFERENCES profiles(id)
+content     text        NOT NULL
+created_at  timestamptz NOT NULL DEFAULT now()
 ```
 
 ### `direct_messages`
 
-Admin-to-user messaging (#57), with replies. An admin starts a conversation with a single client or contractor; the recipient can reply, delete, and mark read from the shared `/notifications` page (also surfaced as an unread-count badge in the Navbar, via `components/NotificationBell.tsx`). Not scoped to a project. Threading is flat -- a reply's `thread_id` always points at the conversation's root message, never at another reply -- see `docs/database-schema.md` for the full migration, RLS policies, and rationale.
+Admin-to-user messaging (#57), with replies and a required title. An admin starts a conversation with a single client or contractor; the recipient replies from the shared `/notifications` page. Threading is flat -- a reply's `thread_id` always points at the conversation's root message, never at another reply. **Pure append-only content now** -- no `read_at` column; all read/pin/delete state lives on `notifications` instead (see below). See `docs/database-schema.md` for the full migration, RLS policies, and rationale.
 
 ```sql
 id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
 recipient_id  uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
 sender_id     uuid        NOT NULL REFERENCES profiles(id)
 thread_id     uuid        REFERENCES direct_messages(id) ON DELETE CASCADE
+title         text        NOT NULL DEFAULT 'Message'
 content       text        NOT NULL
-read_at       timestamptz
 created_at    timestamptz NOT NULL DEFAULT now()
 ```
+
+### `notifications`
+
+The unified in-app feed (#57 follow-up) -- every DM, announcement, and system event (proposal/request/project-lifecycle, project-thread replies) lands here as one row per recipient. Categorized (`direct_message`/`announcement`/`system`), with `pinned_at`/`read_at` for the pin and read/unread controls on `/notifications`, and `link` for the "View" action on system-category rows. **Written exclusively by `SECURITY DEFINER` trigger functions** -- there is no `authenticated` INSERT grant, so client code can never forge a notification. Surfaced site-wide as an unread-count badge via `components/NotificationBell.tsx` in the Navbar.
+
+```sql
+id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+recipient_id       uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
+sender_id          uuid        REFERENCES profiles(id)
+category           text        NOT NULL CHECK (category IN ('direct_message', 'announcement', 'system'))
+title              text        NOT NULL
+body               text        NOT NULL
+link               text
+direct_message_id  uuid        REFERENCES direct_messages(id) ON DELETE CASCADE
+thread_root_id     uuid
+announcement_id    uuid        REFERENCES announcements(id) ON DELETE CASCADE
+pinned_at          timestamptz
+read_at            timestamptz
+created_at         timestamptz NOT NULL DEFAULT now()
+```
+
+### `announcements`
+
+Admin-authored, role-targeted broadcasts (#57 follow-up), composed on `/login/admin/announcements`. Not repliable. `target_roles` is any subset of `{admin, client, contractor}`; a trigger fans a copy out to `notifications` for every matching profile. Read receipts are exposed to admins via the `get_announcement_read_receipts()` RPC rather than broadening `notifications`' RLS.
+
+```sql
+id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+sender_id     uuid        NOT NULL REFERENCES profiles(id)
+title         text        NOT NULL
+body          text        NOT NULL
+target_roles  text[]      NOT NULL
+created_at    timestamptz NOT NULL DEFAULT now()
+```
+
+**Which table triggers which notification** -- see the "System-event triggers" table in `docs/database-schema.md` for the full proposal/request/project-lifecycle list; the short version is admins are notified on proposal submission and access requests, clients/contractors are notified on approvals/rejections/assignments, and every project member (except the actor) is notified on new project-thread messages and new contractors joining.
 
 ---
 
@@ -232,6 +267,24 @@ AS $$
   SELECT sender_id FROM public.direct_messages WHERE id = p_message_id;
 $$;
 ```
+
+`project_messages` RLS (#56, re-implemented) mirrors `is_project_client()` with a contractor-side counterpart:
+
+```sql
+CREATE OR REPLACE FUNCTION public.is_project_contractor(p_project_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.contractor_projects
+    WHERE project_id = p_project_id AND contractor_id = auth.uid()
+  );
+$$;
+```
+
+The `notifications`/`announcements` system (#57 follow-up) also introduces a set of `SECURITY DEFINER` **trigger functions** (not just query helpers) that write into `notifications` on `INSERT`/`UPDATE` of `direct_messages`, `announcements`, `project_messages`, `proposals`, `proposal_requests`, `contractor_projects`, and `projects` — this is what lets those tables' RLS stay narrow (no `authenticated` INSERT grant on `notifications` at all) while still auto-populating the feed regardless of whether the triggering write came from a server action or the browser client. Full list and SQL: `docs/database-schema.md`'s "Notifications System Migration" section.
 
 ---
 
