@@ -17,7 +17,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const loadProfile = async () => {
-      setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
@@ -38,6 +37,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     loadProfile()
 
+    // Supabase silently re-validates/refreshes the session (and fires this)
+    // whenever a hidden tab regains focus, not just on real sign-in/out. Reload
+    // the profile in the background without touching `loading` — flipping it
+    // back to true would make RouteGuard swap the whole page for a spinner,
+    // unmounting it and wiping any in-progress form state on every tab switch.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       loadProfile()
     })
