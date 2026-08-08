@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
@@ -88,6 +88,28 @@ function NotificationsContent() {
   const [replyContent, setReplyContent] = useState('')
   const [replySending, setReplySending] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
+  const threadListRef = useRef<HTMLDivElement>(null)
+
+  // Guards optimistic read/pin state against a poll refresh landing before the
+  // write it's protecting has actually persisted (which was reverting reads/pins
+  // back to their old value ~one poll cycle after the click that set them).
+  const pendingWritesRef = useRef<Map<string, Partial<Pick<Notification, 'read_at' | 'pinned_at'>>>>(new Map())
+
+  function applyPendingWrite(ids: string[], patch: Partial<Pick<Notification, 'read_at' | 'pinned_at'>>) {
+    for (const id of ids) {
+      pendingWritesRef.current.set(id, { ...pendingWritesRef.current.get(id), ...patch })
+    }
+  }
+
+  function clearPendingWrite(ids: string[]) {
+    for (const id of ids) pendingWritesRef.current.delete(id)
+  }
+
+  useEffect(() => {
+    const el = threadListRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [threadMessages])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -106,7 +128,14 @@ function NotificationsContent() {
       if (error) {
         setError(error.message)
       } else {
-        setNotifications((data as unknown as Notification[]) || [])
+        const fresh = (data as unknown as Notification[]) || []
+        const merged = pendingWritesRef.current.size === 0
+          ? fresh
+          : fresh.map((n) => {
+              const pending = pendingWritesRef.current.get(n.id)
+              return pending ? { ...n, ...pending } : n
+            })
+        setNotifications(merged)
       }
       setLoading(false)
     }
@@ -167,8 +196,12 @@ function NotificationsContent() {
     const unreadIds = selectedItem.memberIds.filter((id) => notifications.find((n) => n.id === id)?.read_at == null)
     if (unreadIds.length > 0) {
       const readAt = new Date().toISOString()
+      applyPendingWrite(unreadIds, { read_at: readAt })
       setNotifications((prev) => prev.map((n) => (unreadIds.includes(n.id) ? { ...n, read_at: readAt } : n)))
-      supabase.from('notifications').update({ read_at: readAt }).in('id', unreadIds)
+      supabase.from('notifications').update({ read_at: readAt }).in('id', unreadIds).then(({ error }) => {
+        clearPendingWrite(unreadIds)
+        if (error) setError(error.message)
+      })
     }
 
     if (activeCategory === 'direct_message') {
@@ -188,12 +221,16 @@ function NotificationsContent() {
     if (totalUnread === 0 || !profile?.id) return
     setMarkingAll(true)
     const readAt = new Date().toISOString()
+    const ids = notifications.filter((n) => !n.read_at).map((n) => n.id)
+    applyPendingWrite(ids, { read_at: readAt })
     setNotifications((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: readAt })))
-    await supabase
+    const { error } = await supabase
       .from('notifications')
       .update({ read_at: readAt })
       .eq('recipient_id', profile.id)
       .is('read_at', null)
+    clearPendingWrite(ids)
+    if (error) setError(error.message)
     setMarkingAll(false)
   }
 
@@ -201,20 +238,31 @@ function NotificationsContent() {
     if (!selectedItem) return
     const pinnedAt = selectedItem.representative.pinned_at ? null : new Date().toISOString()
     const id = selectedItem.representative.id
+    applyPendingWrite([id], { pinned_at: pinnedAt })
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, pinned_at: pinnedAt } : n)))
-    await supabase.from('notifications').update({ pinned_at: pinnedAt }).eq('id', id)
+    const { error } = await supabase.from('notifications').update({ pinned_at: pinnedAt }).eq('id', id)
+    clearPendingWrite([id])
+    if (error) setError(error.message)
   }
 
   async function toggleReadState() {
     if (!selectedItem) return
     const readAt = selectedItem.isUnread ? new Date().toISOString() : null
     const ids = selectedItem.memberIds
+    applyPendingWrite(ids, { read_at: readAt })
     setNotifications((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, read_at: readAt } : n)))
-    await supabase.from('notifications').update({ read_at: readAt }).in('id', ids)
+    const { error } = await supabase.from('notifications').update({ read_at: readAt }).in('id', ids)
+    clearPendingWrite(ids)
+    if (error) setError(error.message)
   }
 
   async function deleteSelected() {
     if (!selectedItem) return
+    const isConversation = activeCategory === 'direct_message' && selectedItem.memberIds.length > 1
+    const confirmMessage = isConversation
+      ? 'Delete this entire conversation? This cannot be undone.'
+      : 'Delete this message? This cannot be undone.'
+    if (!confirm(confirmMessage)) return
     const ids = selectedItem.memberIds
     setNotifications((prev) => prev.filter((n) => !ids.includes(n.id)))
     setSelectedKey(null)
@@ -317,11 +365,11 @@ function NotificationsContent() {
             <div className="w-8 h-8 rounded-full border-[3px] border-gray-200 border-t-gray-600 animate-spin" />
           </div>
         ) : (
-          <div className="flex-1 flex border rounded-lg overflow-hidden" style={{ borderColor: 'var(--nwd-border)', minHeight: '32rem' }}>
+          <div className="flex border rounded-lg overflow-hidden" style={{ borderColor: 'var(--nwd-border)', height: '32rem' }}>
 
             {/* ── List pane ── */}
             <div
-              className={`${selectedKey ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 flex-shrink-0 border-r flex-col`}
+              className={`${selectedKey ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 flex-shrink-0 border-r flex-col min-h-0`}
               style={{ borderColor: 'var(--nwd-border)' }}
             >
               <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
@@ -362,7 +410,7 @@ function NotificationsContent() {
             </div>
 
             {/* ── Detail pane ── */}
-            <div className={`${selectedKey ? 'flex' : 'hidden sm:flex'} flex-1 flex-col min-w-0`}>
+            <div className={`${selectedKey ? 'flex' : 'hidden sm:flex'} flex-1 flex-col min-w-0 min-h-0`}>
               {!selectedItem ? (
                 <div className="flex-1 flex items-center justify-center">
                   <p className="text-sm text-gray-400">Select a message to view</p>
@@ -424,7 +472,7 @@ function NotificationsContent() {
 
                   {activeCategory === 'direct_message' ? (
                     <>
-                      <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+                      <div ref={threadListRef} className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
                         {threadLoading && threadMessages.length === 0 ? (
                           <p className="text-sm text-gray-400">Loading…</p>
                         ) : (

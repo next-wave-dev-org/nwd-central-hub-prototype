@@ -775,6 +775,12 @@ AFTER INSERT ON public.contractor_projects
 FOR EACH ROW EXECUTE FUNCTION public.notify_contractor_joined();
 
 -- 14. projects -> notify assigned client (on creation, or later assignment)
+-- Skipped on INSERT when the project came from an approved proposal (proposal_id
+-- set) — the client already gets a "Proposal approved" notification for that same
+-- event via trg_notify_client_proposal_status, so this would be a redundant second
+-- notification. Still fires for admin-direct project creation (no proposal) and for
+-- later reassignment of an existing project's client, since neither of those has any
+-- other notification covering them.
 CREATE OR REPLACE FUNCTION public.notify_client_assigned()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -782,7 +788,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NEW.client_id IS NOT NULL AND (TG_OP = 'INSERT' OR OLD.client_id IS DISTINCT FROM NEW.client_id) THEN
+  IF NEW.client_id IS NOT NULL
+     AND (TG_OP = 'INSERT' OR OLD.client_id IS DISTINCT FROM NEW.client_id)
+     AND NOT (TG_OP = 'INSERT' AND NEW.proposal_id IS NOT NULL) THEN
     INSERT INTO public.notifications (recipient_id, category, title, body, link)
     VALUES (
       NEW.client_id, 'system', 'You were assigned to a project',
