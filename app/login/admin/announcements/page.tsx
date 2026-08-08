@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types/auth'
 import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
+import { notifyAnnouncementByEmail } from '@/lib/email/notificationActions'
 
 type Announcement = {
   id: string
@@ -116,6 +117,7 @@ function AdminAnnouncementsContent() {
     setTitle('')
     setBody('')
     setTargetRoles([])
+    notifyAnnouncementByEmail(targetRoles, trimmedTitle, trimmedBody)
     await fetchAnnouncements()
   }
 

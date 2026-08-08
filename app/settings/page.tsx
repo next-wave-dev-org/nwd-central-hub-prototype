@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
+import { useAuth } from '@/components/AuthProvider'
+import { supabase } from '@/lib/supabase'
 
 const TIMEZONES = [
   'UTC',
@@ -58,9 +60,22 @@ function ToggleSwitch({
 }
 
 function SettingsContent() {
+  const { profile } = useAuth()
 
   const [timezone, setTimezone] = useState(TIMEZONES[0])
-  const [emailNotifications, setEmailNotifications] = useState(true)
+  const [emailNotifications, setEmailNotifications] = useState(profile?.email_notifications ?? true)
+  const [emailNotificationsError, setEmailNotificationsError] = useState<string | null>(null)
+
+  async function handleEmailNotificationsChange(value: boolean) {
+    setEmailNotifications(value)
+    setEmailNotificationsError(null)
+    if (!profile?.id) return
+    const { error } = await supabase.from('profiles').update({ email_notifications: value }).eq('id', profile.id)
+    if (error) {
+      setEmailNotifications(!value)
+      setEmailNotificationsError(error.message)
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -105,12 +120,14 @@ function SettingsContent() {
               <div className="divide-y divide-gray-100">
                 <ToggleSwitch
                   label="Email notifications"
-                  description="Project and account updates via email"
+                  description="Direct messages and announcements via email"
                   checked={emailNotifications}
-                  onChange={setEmailNotifications}
+                  onChange={handleEmailNotificationsChange}
                 />
               </div>
-              <p className="text-xs text-gray-400 mt-2">Coming soon — notification preferences aren&apos;t saved yet.</p>
+              {emailNotificationsError && (
+                <p className="text-xs mt-2" style={{ color: '#9f1239' }}>{emailNotificationsError}</p>
+              )}
             </div>
 
             <div className="bg-white p-8 rounded-lg shadow-md">

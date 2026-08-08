@@ -5,6 +5,7 @@ import Modal from '@/components/Modal'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
+import { notifyDirectMessageByEmail } from '@/lib/email/notificationActions'
 import type { UserRole } from '@/types/auth'
 
 export type Recipient = {
@@ -88,6 +89,7 @@ export default function SendMessageModal({ onClose, recipients }: SendMessageMod
 
     setSending(false)
     setSent(true)
+    notifyDirectMessageByEmail(recipients.map((r) => r.id), trimmedTitle, trimmedContent)
   }
 
   if (sent) {

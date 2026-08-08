@@ -1067,6 +1067,30 @@ GRANT EXECUTE ON FUNCTION public.add_direct_message_participants(uuid, uuid[]) T
 
 ---
 
+## Email Notifications Migration (apply by hand)
+
+Adds a per-user opt-out for email delivery, backing the Settings page's "Email notifications" toggle (previously a non-functional placeholder). Direct messages (new + replies) and announcements now also send an email via Resend, reusing the integration already wired for onboarding (`lib/email/sendWelcomeEmail.ts`) — see `lib/email/sendNotificationEmail.ts` and `lib/email/notificationActions.ts`. System-category notifications (proposal/request/project lifecycle) deliberately stay in-app-only for now — those already fire frequently for admins, and email-per-event would likely be more noise than signal; can be added later if wanted.
+
+```sql
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email_notifications boolean NOT NULL DEFAULT true;
+
+-- Column-restricted grant: combined with the row-level policy below, a user
+-- can update only this one column of only their own row — not role, name, etc.
+GRANT UPDATE (email_notifications) ON public.profiles TO authenticated;
+
+DROP POLICY IF EXISTS "Users can update their own email notification preference" ON public.profiles;
+CREATE POLICY "Users can update their own email notification preference"
+ON public.profiles FOR UPDATE TO authenticated
+USING (id = auth.uid())
+WITH CHECK (id = auth.uid());
+```
+
+**Notes:**
+- Checked by `email_notifications != false` (not `= true`) wherever emails are sent, so existing rows (which get `DEFAULT true` on the ALTER) and any future NULL are treated as opted-in.
+- Email sending happens from server actions (`lib/email/notificationActions.ts`), called right after the client-side insert succeeds in `SendMessageModal`, the notifications page's reply flow, and the announcements composer — not from a DB trigger, since Postgres can't call the Resend API directly and this app has no webhook/edge-function bridge configured. This makes email best-effort: if the browser tab closes or the network drops between the DB write succeeding and the follow-up server action call, the in-app notification still exists (source of truth) but the email won't send. Acceptable for a supplementary channel; revisit with a DB webhook if that gap matters later.
+
+---
+
 ## Relationships
 
 ```
@@ -1196,7 +1220,7 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 | NULL rows in `profiles` | Orphaned auth records from out-of-flow user creation | Future cleanup migration (non-blocking) |
 | `budget` has no numeric constraint | Freeform text — no validation beyond form `type="number"` | Post-MVP hardening |
 | Terminal status not enforced at DB level | `approved`/`rejected` proposals can be updated via direct SQL | Post-MVP hardening (CHECK constraint or trigger) |
-| No email delivery for notifications | All notification types (DM, announcement, system) are in-app only; the Settings "Email notifications" toggle is still a non-functional placeholder | Post-MVP — Resend is already wired for onboarding email and could be extended |
+| No email delivery for system-category notifications | Only direct messages and announcements send email (see the Email Notifications Migration); proposal/request/project lifecycle events stay in-app-only, deliberately, since those already fire often for admins | Extend `lib/email/notificationActions.ts` if wanted later |
 
 ---
 

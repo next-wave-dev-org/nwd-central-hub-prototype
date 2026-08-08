@@ -10,6 +10,7 @@ import type { Notification, NotificationCategory } from '@/types/notifications'
 import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
 import SelectUsersModal from '@/components/SelectUsersModal'
 import SendMessageModal, { type Recipient } from '@/components/SendMessageModal'
+import { notifyDirectMessageByEmail } from '@/lib/email/notificationActions'
 import type { UserProfile } from '@/types/auth'
 
 const POLL_INTERVAL_MS = 8000
@@ -95,6 +96,7 @@ function NotificationsContent() {
   const threadListRef = useRef<HTMLDivElement>(null)
 
   const [participantIds, setParticipantIds] = useState<string[]>([])
+  const [participants, setParticipants] = useState<{ id: string; name: string | null; email: string }[]>([])
   const [showAddUsers, setShowAddUsers] = useState(false)
   const [addUsersError, setAddUsersError] = useState<string | null>(null)
 
@@ -116,10 +118,17 @@ function NotificationsContent() {
     for (const id of ids) pendingWritesRef.current.delete(id)
   }
 
+  // Only force-scroll to the bottom right after WE open a thread or send into
+  // it — never on a background poll pulling in someone else's reply, which
+  // was yanking the view to the bottom out from under anyone scrolled up
+  // reading older messages.
+  const shouldScrollToBottomRef = useRef(true)
+
   useEffect(() => {
     const el = threadListRef.current
-    if (!el) return
+    if (!el || !shouldScrollToBottomRef.current) return
     el.scrollTop = el.scrollHeight
+    shouldScrollToBottomRef.current = false
   }, [threadMessages])
 
   useEffect(() => {
@@ -167,10 +176,21 @@ function NotificationsContent() {
 
   const totalUnread = notifications.filter((n) => !n.read_at).length
 
-  const listItems = useMemo(
-    () => sortListItems(buildListItems(notifications, activeCategory)),
-    [notifications, activeCategory]
-  )
+  const [listSearch, setListSearch] = useState('')
+
+  const listItems = useMemo(() => {
+    const items = sortListItems(buildListItems(notifications, activeCategory))
+    const q = listSearch.trim().toLowerCase()
+    if (!q) return items
+    return items.filter((item) => {
+      const n = item.representative
+      return (
+        n.title.toLowerCase().includes(q) ||
+        n.body.toLowerCase().includes(q) ||
+        (n.profiles?.name ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [notifications, activeCategory, listSearch])
 
   const selectedItem = listItems.find((item) => item.key === selectedKey) ?? null
 
@@ -189,10 +209,18 @@ function NotificationsContent() {
   async function fetchParticipants(rootId: string) {
     const { data, error } = await supabase
       .from('direct_message_participants')
-      .select('profile_id')
+      .select('profile_id, profiles!profile_id(name, email)')
       .eq('thread_root_id', rootId)
 
-    if (!error && data) setParticipantIds(data.map((row) => row.profile_id as string))
+    if (!error && data) {
+      setParticipantIds(data.map((row) => row.profile_id as string))
+      setParticipants(
+        data.map((row) => {
+          const p = row.profiles as unknown as { name: string | null; email: string } | null
+          return { id: row.profile_id as string, name: p?.name ?? null, email: p?.email ?? '' }
+        })
+      )
+    }
   }
 
   // Keep the selection valid as data changes (category switch, delete, poll refresh
@@ -211,6 +239,7 @@ function NotificationsContent() {
     if (!selectedItem) {
       setThreadMessages([])
       setParticipantIds([])
+      setParticipants([])
       return
     }
 
@@ -226,6 +255,7 @@ function NotificationsContent() {
     }
 
     if (activeCategory === 'direct_message') {
+      shouldScrollToBottomRef.current = true
       fetchThread(selectedItem.key)
       fetchParticipants(selectedItem.key)
     }
@@ -304,11 +334,13 @@ function NotificationsContent() {
     setReplySending(true)
     setReplyError(null)
 
+    const replyTitle = `Re: ${item.representative.title}`.slice(0, TITLE_MAX_LENGTH)
+
     const { error } = await supabase.from('direct_messages').insert({
       sender_id: profile.id,
       recipient_id: item.representative.sender_id,
       thread_id: item.key,
-      title: `Re: ${item.representative.title}`.slice(0, TITLE_MAX_LENGTH),
+      title: replyTitle,
       content: trimmed,
     })
 
@@ -320,7 +352,9 @@ function NotificationsContent() {
 
     setReplySending(false)
     setReplyContent('')
+    shouldScrollToBottomRef.current = true
     fetchThread(item.key)
+    notifyDirectMessageByEmail(participantIds.filter((id) => id !== profile.id), replyTitle, trimmed)
   }
 
   async function handleAddUsersConfirm(users: UserProfile[]) {
@@ -436,9 +470,21 @@ function NotificationsContent() {
               className={`${selectedKey ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 flex-shrink-0 border-r flex-col min-h-0`}
               style={{ borderColor: 'var(--nwd-border)' }}
             >
+              <div className="p-2 border-b flex-shrink-0" style={{ borderColor: 'var(--nwd-border)' }}>
+                <input
+                  type="text"
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  placeholder="Search"
+                  className="w-full border rounded-lg px-3 py-1.5 text-sm text-gray-900"
+                  style={{ borderColor: 'var(--nwd-border)' }}
+                />
+              </div>
               <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
                 {listItems.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-10 px-4">Nothing here.</p>
+                  <p className="text-sm text-gray-400 text-center py-10 px-4">
+                    {listSearch.trim() ? 'No matches.' : 'Nothing here.'}
+                  </p>
                 ) : (
                   listItems.map((item) => {
                     const n = item.representative
@@ -532,6 +578,11 @@ function NotificationsContent() {
                         </button>
                       </div>
                     </div>
+                    {activeCategory === 'direct_message' && participants.length > 0 && (
+                      <p className="text-xs text-gray-400 mt-1.5 truncate">
+                        With: {participants.map((p) => p.name ?? p.email).join(', ')}
+                      </p>
+                    )}
                   </div>
 
                   {activeCategory === 'direct_message' ? (
