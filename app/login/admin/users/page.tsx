@@ -653,12 +653,12 @@ function ManageUsersContent() {
       {messagingUser && (messagingUser.role === 'client' || messagingUser.role === 'contractor') && (
         <SendMessageModal
           onClose={() => setMessagingUser(null)}
-          recipient={{
+          recipients={[{
             id: messagingUser.id,
             name: messagingUser.name ?? null,
             email: messagingUser.email,
             role: messagingUser.role,
-          }}
+          }]}
         />
       )}
 

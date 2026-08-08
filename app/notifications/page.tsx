@@ -8,6 +8,9 @@ import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import type { Notification, NotificationCategory } from '@/types/notifications'
 import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
+import SelectUsersModal from '@/components/SelectUsersModal'
+import SendMessageModal, { type Recipient } from '@/components/SendMessageModal'
+import type { UserProfile } from '@/types/auth'
 
 const POLL_INTERVAL_MS = 8000
 
@@ -90,6 +93,13 @@ function NotificationsContent() {
   const [replySending, setReplySending] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
   const threadListRef = useRef<HTMLDivElement>(null)
+
+  const [participantIds, setParticipantIds] = useState<string[]>([])
+  const [showAddUsers, setShowAddUsers] = useState(false)
+  const [addUsersError, setAddUsersError] = useState<string | null>(null)
+
+  const [showNewMessagePicker, setShowNewMessagePicker] = useState(false)
+  const [newMessageRecipients, setNewMessageRecipients] = useState<Recipient[] | null>(null)
 
   // Guards optimistic read/pin state against a poll refresh landing before the
   // write it's protecting has actually persisted (which was reverting reads/pins
@@ -176,6 +186,15 @@ function NotificationsContent() {
     setThreadLoading(false)
   }
 
+  async function fetchParticipants(rootId: string) {
+    const { data, error } = await supabase
+      .from('direct_message_participants')
+      .select('profile_id')
+      .eq('thread_root_id', rootId)
+
+    if (!error && data) setParticipantIds(data.map((row) => row.profile_id as string))
+  }
+
   // Keep the selection valid as data changes (category switch, delete, poll refresh
   // dropping the current item) — auto-select the next best item, but never fight an
   // existing valid selection during background polling.
@@ -191,6 +210,7 @@ function NotificationsContent() {
 
     if (!selectedItem) {
       setThreadMessages([])
+      setParticipantIds([])
       return
     }
 
@@ -207,6 +227,7 @@ function NotificationsContent() {
 
     if (activeCategory === 'direct_message') {
       fetchThread(selectedItem.key)
+      fetchParticipants(selectedItem.key)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItem?.key])
@@ -302,6 +323,32 @@ function NotificationsContent() {
     fetchThread(item.key)
   }
 
+  async function handleAddUsersConfirm(users: UserProfile[]) {
+    if (!selectedItem) return
+    setAddUsersError(null)
+
+    const { error } = await supabase.rpc('add_direct_message_participants', {
+      p_thread_root_id: selectedItem.key,
+      p_profile_ids: users.map((u) => u.id),
+    })
+
+    if (error) {
+      setAddUsersError(error.message)
+      return
+    }
+
+    setShowAddUsers(false)
+    fetchParticipants(selectedItem.key)
+    fetchThread(selectedItem.key)
+  }
+
+  function handleNewMessagePickerConfirm(users: UserProfile[]) {
+    setNewMessageRecipients(
+      users.map((u) => ({ id: u.id, name: u.name ?? null, email: u.email, role: u.role }))
+    )
+    setShowNewMessagePicker(false)
+  }
+
   function formatTime(iso: string) {
     return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
   }
@@ -322,16 +369,27 @@ function NotificationsContent() {
             </p>
             <h1 className="text-3xl font-bold text-gray-900 leading-tight">Notifications</h1>
           </div>
-          {totalUnread > 0 && (
-            <button
-              onClick={markAllRead}
-              disabled={markingAll}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-              style={{ borderColor: 'var(--nwd-border)', color: '#6b7280' }}
-            >
-              {markingAll ? 'Marking…' : 'Mark all as read'}
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {profile?.role === 'admin' && (
+              <button
+                onClick={() => setShowNewMessagePicker(true)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer flex-shrink-0"
+                style={{ background: 'var(--nwd-teal)' }}
+              >
+                New +
+              </button>
+            )}
+            {totalUnread > 0 && (
+              <button
+                onClick={markAllRead}
+                disabled={markingAll}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                style={{ borderColor: 'var(--nwd-border)', color: '#6b7280' }}
+              >
+                {markingAll ? 'Marking…' : 'Mark all as read'}
+              </button>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -505,14 +563,25 @@ function NotificationsContent() {
                             className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 resize-none"
                             style={{ borderColor: 'var(--nwd-border)' }}
                           />
-                          <button
-                            onClick={sendReply}
-                            disabled={replySending || !replyContent.trim()}
-                            className="self-start px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ background: 'var(--nwd-teal)' }}
-                          >
-                            {replySending ? 'Sending…' : 'Reply'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={sendReply}
+                              disabled={replySending || !replyContent.trim()}
+                              className="self-start px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ background: 'var(--nwd-teal)' }}
+                            >
+                              {replySending ? 'Sending…' : 'Reply'}
+                            </button>
+                            {profile?.role === 'admin' && (
+                              <button
+                                onClick={() => setShowAddUsers(true)}
+                                className="self-start px-4 py-1.5 rounded-lg text-sm font-semibold border cursor-pointer transition-colors hover:bg-gray-50"
+                                style={{ borderColor: 'var(--nwd-border)', color: '#6b7280' }}
+                              >
+                                Add User
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </>
@@ -537,6 +606,35 @@ function NotificationsContent() {
           NWD CENTRAL HUB
         </p>
       </footer>
+
+      {showAddUsers && selectedItem && (
+        <SelectUsersModal
+          title="Add to Conversation"
+          warning="Anyone you add will be able to see this conversation's full message history, not just messages sent after they join."
+          confirmLabel={(n) => (n > 0 ? `Add ${n} User${n === 1 ? '' : 's'}` : 'Add')}
+          excludeIds={participantIds}
+          onClose={() => { setShowAddUsers(false); setAddUsersError(null) }}
+          onConfirm={handleAddUsersConfirm}
+          confirmError={addUsersError}
+        />
+      )}
+
+      {showNewMessagePicker && (
+        <SelectUsersModal
+          title="New Message"
+          confirmLabel={() => 'Next'}
+          excludeIds={[]}
+          onClose={() => setShowNewMessagePicker(false)}
+          onConfirm={handleNewMessagePickerConfirm}
+        />
+      )}
+
+      {newMessageRecipients && (
+        <SendMessageModal
+          recipients={newMessageRecipients}
+          onClose={() => setNewMessageRecipients(null)}
+        />
+      )}
     </div>
   )
 }

@@ -5,22 +5,23 @@ import Modal from '@/components/Modal'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
+import type { UserRole } from '@/types/auth'
 
-type Recipient = {
+export type Recipient = {
   id: string
   name: string | null
   email: string
-  role: 'client' | 'contractor'
+  role: UserRole
 }
 
 type SendMessageModalProps = {
   onClose: () => void
-  recipient: Recipient
+  recipients: Recipient[]
 }
 
 const CLOSE_DELAY_MS = 2000
 
-export default function SendMessageModal({ onClose, recipient }: SendMessageModalProps) {
+export default function SendMessageModal({ onClose, recipients }: SendMessageModalProps) {
   const { profile } = useAuth()
 
   const [title, setTitle] = useState('')
@@ -53,17 +54,36 @@ export default function SendMessageModal({ onClose, recipient }: SendMessageModa
     setSending(true)
     setSendError(null)
 
-    const { error } = await supabase.from('direct_messages').insert({
-      recipient_id: recipient.id,
-      sender_id: profile.id,
-      title: trimmedTitle,
-      content: trimmedContent,
-    })
+    const [firstRecipient, ...otherRecipients] = recipients
+
+    const { data, error } = await supabase
+      .from('direct_messages')
+      .insert({
+        recipient_id: firstRecipient.id,
+        sender_id: profile.id,
+        title: trimmedTitle,
+        content: trimmedContent,
+      })
+      .select('id')
+      .single()
 
     if (error) {
       setSendError(error.message)
       setSending(false)
       return
+    }
+
+    if (otherRecipients.length > 0) {
+      const { error: addError } = await supabase.rpc('add_direct_message_participants', {
+        p_thread_root_id: data.id,
+        p_profile_ids: otherRecipients.map((r) => r.id),
+      })
+
+      if (addError) {
+        setSendError(addError.message)
+        setSending(false)
+        return
+      }
     }
 
     setSending(false)
@@ -96,8 +116,10 @@ export default function SendMessageModal({ onClose, recipient }: SendMessageModa
             TO
           </label>
           <p className="text-sm font-semibold text-gray-900">
-            {recipient.name ?? recipient.email}
-            <span className="ml-2 text-xs font-normal text-gray-400 capitalize">({recipient.role})</span>
+            {recipients.map((r) => r.name ?? r.email).join(', ')}
+            {recipients.length === 1 && (
+              <span className="ml-2 text-xs font-normal text-gray-400 capitalize">({recipients[0].role})</span>
+            )}
           </p>
         </div>
 

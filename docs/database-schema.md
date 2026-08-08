@@ -271,7 +271,8 @@ created_at    timestamptz NOT NULL DEFAULT now()
 
 **Notes:**
 - A row with `thread_id IS NULL` is a **thread root** — a new conversation, currently only startable by an admin (enforced by the INSERT policy). A row with `thread_id` set is a **reply**, and always points at the root's `id`, never at another reply — so "which conversation is this" is always `thread_id ?? id`, a single lookup, with no arbitrary-depth tree to reconstruct.
-- A reply's `recipient_id`/`sender_id` are the mirror of the message it's replying to (reply `recipient_id` = root's `sender_id`). There's no separate "participants" concept — a conversation is just the set of rows sharing a `thread_id ?? id`.
+- A reply's `recipient_id`/`sender_id` are the mirror of the message it's replying to (reply `recipient_id` = root's `sender_id`). As of the Add User feature (below), this is informational only for replies in a 3+-person thread — access and delivery are governed entirely by `direct_message_participants`, not by any single row's `recipient_id`.
+- **Multi-party threads (Add User, below):** a conversation's actual membership lives in `direct_message_participants`, not on individual `direct_messages` rows. A thread starts with its two obvious members (root sender + root recipient), seeded automatically; an admin can add more via the `add_direct_message_participants` RPC. Every current participant can read the thread's full history (past and future) and reply into it, not just the original two.
 - `title` is required for a new thread (entered in `SendMessageModal`); a reply's title is computed client-side as `'Re: ' + rootTitle` rather than user-entered, keeping the reply UI to just a body field.
 - **`read_at` was removed** (Notifications System migration below) — read/unread/pinned/deleted state all moved to the `notifications` table, one level up. `direct_messages` is now pure append-only content: the client only ever `INSERT`s into it; everything it needs to *display* (title, body, sender, thread root) is denormalized onto the recipient's `notifications` row by a trigger at insert time, so the client never has to `SELECT` this table directly.
 - Delivery is via polling refetch on `/notifications` and the Navbar unread-count badge (which both read `notifications`, not this table), same reasoning as `project_messages` (avoids subscription/connection-cleanup machinery for MVP).
@@ -369,6 +370,70 @@ USING (recipient_id = auth.uid());
 ```
 
 **This UPDATE policy and the DELETE policy above are both superseded by the Notifications System migration below**, which drops them (read/pin/delete state moves to `notifications`) — apply that migration too, in order; don't stop here.
+
+---
+
+## Table: `direct_message_participants`
+
+Tracks who currently belongs to a `direct_messages` thread — introduced by the **Add User** feature (below), which lets an admin loop additional people into an existing conversation. Before this, a thread was implicitly just its original two people; this table makes membership explicit and is what both read-access and reply-access are checked against.
+
+```sql
+id             uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+thread_root_id uuid        NOT NULL REFERENCES direct_messages(id) ON DELETE CASCADE
+profile_id     uuid        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
+added_by       uuid        REFERENCES profiles(id)
+added_at       timestamptz NOT NULL DEFAULT now()
+UNIQUE (thread_root_id, profile_id)
+```
+
+**Notes:**
+- `thread_root_id` is always a root message's `id` (`thread_id ?? id`), same convention as `notifications.thread_root_id`.
+- A thread's first two rows (the original sender and recipient) are seeded automatically by the `notify_direct_message_recipient` trigger the moment a new thread's root message is inserted — nothing else needs to call this table directly for a normal 1:1 conversation.
+- Every other row comes from `add_direct_message_participants(p_thread_root_id, p_profile_ids)` — a `SECURITY DEFINER` RPC, admin-only (checked inside the function body, same pattern as `get_announcement_read_receipts`). It inserts the participant row(s) and, for anyone genuinely new (not already present), also inserts a `notifications` row pointing at the thread's latest message — otherwise a newly-added person would have DB-level read access to the thread but nothing telling them it exists or putting it in their inbox list.
+- Two callers use this RPC: the "Add User" button on an open thread (`/notifications`, via `SelectUsersModal` + `add_direct_message_participants` directly), and `SendMessageModal` when composing a brand new message to more than one recipient (the "New +" flow on `/notifications`, and any future multi-recipient use of that component) — it inserts the root message to the first selected recipient, then calls this same RPC for the rest so everyone selected ends up as a thread participant and gets notified.
+- **No `INSERT` grant to `authenticated`** — same reasoning as `notifications`: every row is written by a `SECURITY DEFINER` function, never directly by client code, so there's no path for a client to add themselves (or anyone else) to a conversation.
+- Being a current participant grants full history access to the thread, including messages sent before that participant was added — this was a deliberate choice (matches "CC'ing someone into an email thread") over a future-messages-only model.
+
+```sql
+CREATE TABLE public.direct_message_participants (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_root_id uuid NOT NULL REFERENCES public.direct_messages(id) ON DELETE CASCADE,
+  profile_id     uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  added_by       uuid REFERENCES public.profiles(id),
+  added_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (thread_root_id, profile_id)
+);
+
+CREATE INDEX ON public.direct_message_participants (thread_root_id);
+CREATE INDEX ON public.direct_message_participants (profile_id);
+
+ALTER TABLE public.direct_message_participants ENABLE ROW LEVEL SECURITY;
+
+-- No INSERT grant — every row is written by either the direct_messages trigger
+-- (seeding a new thread's starting two) or the add_direct_message_participants
+-- RPC (Add User), both SECURITY DEFINER.
+GRANT SELECT ON public.direct_message_participants TO authenticated;
+
+-- Mirrors get_my_role()/is_project_client() — lets policies check "am I in
+-- this thread" without recursing back through this table's own RLS.
+CREATE OR REPLACE FUNCTION public.is_thread_participant(p_thread_root_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.direct_message_participants
+    WHERE thread_root_id = p_thread_root_id AND profile_id = auth.uid()
+  );
+$$;
+
+CREATE POLICY "Participants and admins can view thread membership"
+ON public.direct_message_participants FOR SELECT TO authenticated
+USING (public.get_my_role() = 'admin' OR public.is_thread_participant(thread_root_id));
+```
+
+Full migration — including the `direct_messages` policy rewrite, the backfill for threads that predate this table, the trigger update, and the `add_direct_message_participants` RPC — is in the **Multi-Party Direct Messages (Add User) Migration** section below.
 
 ---
 
@@ -835,6 +900,169 @@ ALTER TABLE public.announcements ADD CONSTRAINT announcements_body_length CHECK 
 
 ALTER TABLE public.project_messages DROP CONSTRAINT IF EXISTS project_messages_content_length;
 ALTER TABLE public.project_messages ADD CONSTRAINT project_messages_content_length CHECK (char_length(content) <= 5000);
+```
+
+---
+
+## Multi-Party Direct Messages (Add User) Migration (apply by hand, in this order)
+
+Lets an admin add more people into an existing `direct_messages` thread (the "Add User" button next to Reply on `/notifications`). Added participants get full access to the thread's history, not just messages sent after they joined. Depends on the Notifications System migration above already being applied (`notifications`, `is_thread_participant`'s sibling helpers like `get_my_role()`, etc.).
+
+```sql
+-- 1. direct_message_participants (see table section above for the full CREATE TABLE)
+CREATE TABLE IF NOT EXISTS public.direct_message_participants (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_root_id uuid NOT NULL REFERENCES public.direct_messages(id) ON DELETE CASCADE,
+  profile_id     uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  added_by       uuid REFERENCES public.profiles(id),
+  added_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (thread_root_id, profile_id)
+);
+
+CREATE INDEX IF NOT EXISTS direct_message_participants_thread_root_id_idx ON public.direct_message_participants (thread_root_id);
+CREATE INDEX IF NOT EXISTS direct_message_participants_profile_id_idx ON public.direct_message_participants (profile_id);
+
+ALTER TABLE public.direct_message_participants ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.direct_message_participants TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.is_thread_participant(p_thread_root_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.direct_message_participants
+    WHERE thread_root_id = p_thread_root_id AND profile_id = auth.uid()
+  );
+$$;
+
+DROP POLICY IF EXISTS "Participants and admins can view thread membership" ON public.direct_message_participants;
+CREATE POLICY "Participants and admins can view thread membership"
+ON public.direct_message_participants FOR SELECT TO authenticated
+USING (public.get_my_role() = 'admin' OR public.is_thread_participant(thread_root_id));
+
+-- 2. Backfill: every thread that already exists gets its original sender +
+-- recipient seeded as participants, so existing conversations don't lose
+-- access once the policies below start checking this table.
+INSERT INTO public.direct_message_participants (thread_root_id, profile_id)
+SELECT DISTINCT root_id, participant_id
+FROM (
+  SELECT COALESCE(thread_id, id) AS root_id, sender_id AS participant_id FROM public.direct_messages
+  UNION
+  SELECT COALESCE(thread_id, id) AS root_id, recipient_id AS participant_id FROM public.direct_messages
+) x
+ON CONFLICT (thread_root_id, profile_id) DO NOTHING;
+
+-- 3. direct_messages: SELECT/INSERT now check thread membership instead of a
+-- single row's own sender_id/recipient_id, so any current participant (not
+-- just the original two) can read the full thread and reply into it.
+DROP POLICY IF EXISTS "Participants and admins can view direct messages" ON public.direct_messages;
+CREATE POLICY "Participants and admins can view direct messages"
+ON public.direct_messages FOR SELECT TO authenticated
+USING (public.get_my_role() = 'admin' OR public.is_thread_participant(COALESCE(thread_id, id)));
+
+DROP POLICY IF EXISTS "Admins send freely; recipients reply within their thread" ON public.direct_messages;
+CREATE POLICY "Admins send freely; participants reply within their thread"
+ON public.direct_messages FOR INSERT TO authenticated
+WITH CHECK (
+  sender_id = auth.uid()
+  AND (
+    public.get_my_role() = 'admin'
+    OR (thread_id IS NOT NULL AND public.is_thread_participant(thread_id))
+  )
+);
+
+-- Superseded by is_thread_participant() — no longer referenced by any policy.
+DROP FUNCTION IF EXISTS public.is_direct_message_recipient(uuid);
+DROP FUNCTION IF EXISTS public.direct_message_sender(uuid);
+
+-- 4. direct_messages -> notifications, updated to fan out to every current
+-- participant (not just a single recipient_id), and to seed the first two
+-- participants when a thread starts.
+CREATE OR REPLACE FUNCTION public.notify_direct_message_recipient()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_thread_root_id uuid := COALESCE(NEW.thread_id, NEW.id);
+BEGIN
+  IF NEW.thread_id IS NULL THEN
+    INSERT INTO public.direct_message_participants (thread_root_id, profile_id, added_by)
+    VALUES (v_thread_root_id, NEW.sender_id, NEW.sender_id),
+           (v_thread_root_id, NEW.recipient_id, NEW.sender_id)
+    ON CONFLICT (thread_root_id, profile_id) DO NOTHING;
+  END IF;
+
+  INSERT INTO public.notifications (
+    recipient_id, sender_id, category, title, body, link, direct_message_id, thread_root_id
+  )
+  SELECT dmp.profile_id, NEW.sender_id, 'direct_message', NEW.title, NEW.content, '/notifications',
+         NEW.id, v_thread_root_id
+  FROM public.direct_message_participants dmp
+  WHERE dmp.thread_root_id = v_thread_root_id AND dmp.profile_id != NEW.sender_id;
+
+  -- Bump the sender's own existing notification(s) in this thread, same as
+  -- before — they don't get a fresh row above since the fan-out excludes them.
+  UPDATE public.notifications
+  SET created_at = NEW.created_at
+  WHERE recipient_id = NEW.sender_id
+    AND thread_root_id = v_thread_root_id;
+
+  RETURN NEW;
+END;
+$$;
+
+-- 5. Add User RPC — admin-only (checked inside the function body, same
+-- pattern as get_announcement_read_receipts). Adds participant rows and, for
+-- anyone genuinely new, a notification pointing at the thread's latest
+-- message so it actually shows up in their inbox.
+CREATE OR REPLACE FUNCTION public.add_direct_message_participants(
+  p_thread_root_id uuid,
+  p_profile_ids uuid[]
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_latest record;
+  v_profile_id uuid;
+  v_rows integer;
+BEGIN
+  IF public.get_my_role() != 'admin' THEN
+    RAISE EXCEPTION 'Only admins can add participants to a conversation.';
+  END IF;
+
+  SELECT id, sender_id, title, content INTO v_latest
+  FROM public.direct_messages
+  WHERE id = p_thread_root_id OR thread_id = p_thread_root_id
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  FOREACH v_profile_id IN ARRAY p_profile_ids LOOP
+    INSERT INTO public.direct_message_participants (thread_root_id, profile_id, added_by)
+    VALUES (p_thread_root_id, v_profile_id, auth.uid())
+    ON CONFLICT (thread_root_id, profile_id) DO NOTHING;
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+
+    IF v_rows > 0 AND v_latest.id IS NOT NULL THEN
+      INSERT INTO public.notifications (
+        recipient_id, sender_id, category, title, body, link, direct_message_id, thread_root_id
+      ) VALUES (
+        v_profile_id, v_latest.sender_id, 'direct_message', v_latest.title, v_latest.content,
+        '/notifications', v_latest.id, p_thread_root_id
+      );
+    END IF;
+  END LOOP;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.add_direct_message_participants(uuid, uuid[]) TO authenticated;
 ```
 
 ---
