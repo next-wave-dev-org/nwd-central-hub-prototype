@@ -508,6 +508,19 @@ BEGIN
     NEW.recipient_id, NEW.sender_id, 'direct_message', NEW.title, NEW.content, '/notifications',
     NEW.id, COALESCE(NEW.thread_id, NEW.id)
   );
+
+  -- The sender doesn't get a new notification row for a message they just
+  -- sent (only the recipient does, above) — so without this, the thread would
+  -- stay wherever it last landed in the *sender's* own list, even though they
+  -- just added to it. Bump their existing notification(s) for this thread to
+  -- the new message's timestamp so the conversation moves to the top for both
+  -- parties, not just the one who received it. No-op on a brand new thread's
+  -- first message, since the sender has no prior row in it yet.
+  UPDATE public.notifications
+  SET created_at = NEW.created_at
+  WHERE recipient_id = NEW.sender_id
+    AND thread_root_id = COALESCE(NEW.thread_id, NEW.id);
+
   RETURN NEW;
 END;
 $$;
