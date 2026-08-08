@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import type { Notification, NotificationCategory } from '@/types/notifications'
+import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
 
 const POLL_INTERVAL_MS = 8000
 
@@ -274,6 +275,11 @@ function NotificationsContent() {
     const item = selectedItem
     if (!trimmed || !profile?.id || !item?.representative.sender_id || replySending) return
 
+    if (trimmed.length > BODY_MAX_LENGTH) {
+      setReplyError(`Reply must be ${BODY_MAX_LENGTH} characters or fewer.`)
+      return
+    }
+
     setReplySending(true)
     setReplyError(null)
 
@@ -281,7 +287,7 @@ function NotificationsContent() {
       sender_id: profile.id,
       recipient_id: item.representative.sender_id,
       thread_id: item.key,
-      title: `Re: ${item.representative.title}`,
+      title: `Re: ${item.representative.title}`.slice(0, TITLE_MAX_LENGTH),
       content: trimmed,
     })
 
@@ -494,6 +500,7 @@ function NotificationsContent() {
                             value={replyContent}
                             onChange={(e) => setReplyContent(e.target.value)}
                             rows={2}
+                            maxLength={BODY_MAX_LENGTH}
                             placeholder="Write a reply"
                             className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 resize-none"
                             style={{ borderColor: 'var(--nwd-border)' }}

@@ -6,6 +6,7 @@ import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
+import { BODY_MAX_LENGTH } from '@/lib/messageLimits'
 
 const MESSAGE_POLL_INTERVAL_MS = 8000
 
@@ -109,6 +110,11 @@ function ProjectWorkspaceContent() {
   const sendMessage = async () => {
     const content = newMessage.trim()
     if (!content || !profile?.id || !id || sending) return
+
+    if (content.length > BODY_MAX_LENGTH) {
+      setSendError(`Message must be ${BODY_MAX_LENGTH} characters or fewer.`)
+      return
+    }
 
     setSending(true)
     setSendError(null)
@@ -311,6 +317,7 @@ function ProjectWorkspaceContent() {
                     onKeyDown={handleMessageInputKeyDown}
                     placeholder="Write a message"
                     rows={2}
+                    maxLength={BODY_MAX_LENGTH}
                     className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 resize-none"
                     style={{ borderColor: 'var(--nwd-border)' }}
                   />

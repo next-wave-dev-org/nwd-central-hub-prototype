@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types/auth'
+import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
 
 type Announcement = {
   id: string
@@ -78,6 +79,15 @@ function AdminAnnouncementsContent() {
     const trimmedTitle = title.trim()
     const trimmedBody = body.trim()
     if (!trimmedTitle || !trimmedBody || targetRoles.length === 0 || !profile?.id || sending) return
+
+    if (trimmedTitle.length > TITLE_MAX_LENGTH) {
+      setSendError(`Title must be ${TITLE_MAX_LENGTH} characters or fewer.`)
+      return
+    }
+    if (trimmedBody.length > BODY_MAX_LENGTH) {
+      setSendError(`Message must be ${BODY_MAX_LENGTH} characters or fewer.`)
+      return
+    }
 
     setSending(true)
     setSendError(null)
@@ -173,6 +183,7 @@ function AdminAnnouncementsContent() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
+              maxLength={TITLE_MAX_LENGTH}
               placeholder="Subject"
               className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900"
               style={{ borderColor: 'var(--nwd-border)' }}
@@ -187,6 +198,7 @@ function AdminAnnouncementsContent() {
               value={body}
               onChange={(e) => setBody(e.target.value)}
               required
+              maxLength={BODY_MAX_LENGTH}
               rows={4}
               placeholder="Write an announcement"
               className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 resize-none"

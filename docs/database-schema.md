@@ -804,6 +804,24 @@ $$;
 CREATE TRIGGER trg_notify_client_assigned
 AFTER INSERT OR UPDATE OF client_id ON public.projects
 FOR EACH ROW EXECUTE FUNCTION public.notify_client_assigned();
+
+-- 15. Length limits on user-submitted text
+-- Client-side forms (SendMessageModal, the notifications reply box, the
+-- announcement composer, the project message thread) already enforce these via
+-- maxLength + a pre-submit check, using the same numbers from lib/messageLimits.ts.
+-- These constraints are the server-side backstop in case that's ever bypassed.
+ALTER TABLE public.direct_messages DROP CONSTRAINT IF EXISTS direct_messages_title_length;
+ALTER TABLE public.direct_messages ADD CONSTRAINT direct_messages_title_length CHECK (char_length(title) <= 200);
+ALTER TABLE public.direct_messages DROP CONSTRAINT IF EXISTS direct_messages_content_length;
+ALTER TABLE public.direct_messages ADD CONSTRAINT direct_messages_content_length CHECK (char_length(content) <= 5000);
+
+ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_title_length;
+ALTER TABLE public.announcements ADD CONSTRAINT announcements_title_length CHECK (char_length(title) <= 200);
+ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_body_length;
+ALTER TABLE public.announcements ADD CONSTRAINT announcements_body_length CHECK (char_length(body) <= 5000);
+
+ALTER TABLE public.project_messages DROP CONSTRAINT IF EXISTS project_messages_content_length;
+ALTER TABLE public.project_messages ADD CONSTRAINT project_messages_content_length CHECK (char_length(content) <= 5000);
 ```
 
 ---

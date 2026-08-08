@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Modal from '@/components/Modal'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
+import { TITLE_MAX_LENGTH, BODY_MAX_LENGTH } from '@/lib/messageLimits'
 
 type Recipient = {
   id: string
@@ -39,6 +40,15 @@ export default function SendMessageModal({ onClose, recipient }: SendMessageModa
     const trimmedTitle = title.trim()
     const trimmedContent = content.trim()
     if (!trimmedTitle || !trimmedContent || !profile?.id || sending) return
+
+    if (trimmedTitle.length > TITLE_MAX_LENGTH) {
+      setSendError(`Title must be ${TITLE_MAX_LENGTH} characters or fewer.`)
+      return
+    }
+    if (trimmedContent.length > BODY_MAX_LENGTH) {
+      setSendError(`Message must be ${BODY_MAX_LENGTH} characters or fewer.`)
+      return
+    }
 
     setSending(true)
     setSendError(null)
@@ -100,6 +110,7 @@ export default function SendMessageModal({ onClose, recipient }: SendMessageModa
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
+            maxLength={TITLE_MAX_LENGTH}
             placeholder="Subject"
             className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900"
             style={{ borderColor: 'var(--nwd-border)' }}
@@ -114,6 +125,7 @@ export default function SendMessageModal({ onClose, recipient }: SendMessageModa
             value={content}
             onChange={(e) => setContent(e.target.value)}
             required
+            maxLength={BODY_MAX_LENGTH}
             rows={4}
             placeholder="Write a message"
             className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 resize-none"
