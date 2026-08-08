@@ -277,7 +277,7 @@ function AdminAnnouncementsContent() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap mt-2 line-clamp-2">
+                    <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap break-words mt-2 line-clamp-2">
                       {announcement.body}
                     </p>
                   </div>

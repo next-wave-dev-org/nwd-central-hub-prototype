@@ -488,7 +488,7 @@ function NotificationsContent() {
                                 <span className="font-semibold text-gray-900">{message.profiles?.name ?? 'Unknown'}</span>
                                 <span className="text-xs text-gray-300">{formatTime(message.created_at)}</span>
                               </div>
-                              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
                             </div>
                           ))
                         )}
@@ -518,7 +518,7 @@ function NotificationsContent() {
                     </>
                   ) : (
                     <div className="flex-1 overflow-y-auto px-5 py-4">
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{selectedItem.representative.body}</p>
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words">{selectedItem.representative.body}</p>
                     </div>
                   )}
                 </>

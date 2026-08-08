@@ -300,7 +300,7 @@ function ProjectWorkspaceContent() {
                             })}
                           </span>
                         </div>
-                        <p className="text-gray-900 leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                        <p className="text-gray-900 leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
                       </div>
                     ))
                   )}
