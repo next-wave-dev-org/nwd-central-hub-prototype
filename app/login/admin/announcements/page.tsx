@@ -55,6 +55,8 @@ function AdminAnnouncementsContent() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [receipts, setReceipts] = useState<Record<string, ReadReceipt[]>>({})
   const [loadingReceipts, setLoadingReceipts] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAnnouncements()
@@ -135,6 +137,31 @@ function AdminAnnouncementsContent() {
       setReceipts((prev) => ({ ...prev, [announcement.id]: data as ReadReceipt[] }))
     }
     setLoadingReceipts(null)
+  }
+
+  async function deleteAnnouncement(announcement: Announcement) {
+    if (deletingId) return
+    if (!confirm(`Delete "${announcement.title}"? This removes it from every recipient's inbox too. This cannot be undone.`)) return
+
+    setDeletingId(announcement.id)
+    setDeleteError(null)
+
+    const { error } = await supabase.from('announcements').delete().eq('id', announcement.id)
+
+    if (error) {
+      setDeleteError(error.message)
+      setDeletingId(null)
+      return
+    }
+
+    setAnnouncements((prev) => prev.filter((a) => a.id !== announcement.id))
+    setReceipts((prev) => {
+      const next = { ...prev }
+      delete next[announcement.id]
+      return next
+    })
+    if (expandedId === announcement.id) setExpandedId(null)
+    setDeletingId(null)
   }
 
   return (
@@ -236,6 +263,13 @@ function AdminAnnouncementsContent() {
           </div>
         )}
 
+        {deleteError && (
+          <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
+            <span>{deleteError}</span>
+            <button onClick={() => setDeleteError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
+          </div>
+        )}
+
         <p className="text-xs font-semibold tracking-widest mb-3" style={{ color: 'var(--nwd-purple)', fontFamily: 'var(--font-geist-mono)' }}>
           SENT
         </p>
@@ -260,11 +294,23 @@ function AdminAnnouncementsContent() {
                   <div onClick={() => toggleReceipts(announcement)} className="cursor-pointer">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-gray-900 min-w-0 truncate">{announcement.title}</span>
-                      <span className="text-xs text-gray-300 flex-shrink-0">
-                        {new Date(announcement.created_at).toLocaleString('en-US', {
-                          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                        })}
-                      </span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-xs text-gray-300">
+                          {new Date(announcement.created_at).toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                          })}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteAnnouncement(announcement) }}
+                          disabled={deletingId === announcement.id}
+                          aria-label="Delete announcement"
+                          className="flex items-center text-gray-400 hover:text-rose-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h10M6 4V2.5A.5.5 0 016.5 2h3a.5.5 0 01.5.5V4m-7 0l.5 9a1 1 0 001 1h6a1 1 0 001-1l.5-9" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 mt-1.5">
                       {announcement.target_roles.map((role) => (

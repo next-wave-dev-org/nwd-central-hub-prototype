@@ -40,13 +40,6 @@ const adminItems = [
     accent: 'var(--nwd-purple)',
     tag: 'PROJECTS',
   },
-  {
-    href: '/login/admin/announcements',
-    label: 'Announcements',
-    description: 'Send a system-wide announcement to any combination of roles',
-    accent: 'var(--nwd-sky)',
-    tag: 'ANNOUNCE',
-  },
 ]
 
 function AdminDashboardContent() {

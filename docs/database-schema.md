@@ -512,7 +512,7 @@ CREATE TABLE public.announcements (
 );
 
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
-GRANT SELECT, INSERT ON public.announcements TO authenticated;
+GRANT SELECT, INSERT, DELETE ON public.announcements TO authenticated;
 
 CREATE POLICY "Admins can view announcements"
 ON public.announcements FOR SELECT TO authenticated
@@ -521,6 +521,13 @@ USING (public.get_my_role() = 'admin');
 CREATE POLICY "Admins can send announcements"
 ON public.announcements FOR INSERT TO authenticated
 WITH CHECK (sender_id = auth.uid() AND public.get_my_role() = 'admin');
+
+-- Deleting an announcement cascades to every fanned-out notifications row
+-- (announcement_id references this table ON DELETE CASCADE), removing it from
+-- every recipient's inbox too, not just the admin's sent list.
+CREATE POLICY "Admins can delete announcements"
+ON public.announcements FOR DELETE TO authenticated
+USING (public.get_my_role() = 'admin');
 
 -- 3. notifications
 CREATE TABLE public.notifications (

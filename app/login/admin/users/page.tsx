@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import SendMessageModal from '@/components/SendMessageModal'
@@ -353,8 +354,19 @@ function ManageUsersContent() {
 
           {/* ── All Users ── */}
           <section>
-            <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}>ALL USERS</p>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Registered users</h2>
+            <div className="flex items-end justify-between mb-6">
+              <div>
+                <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}>ALL USERS</p>
+                <h2 className="text-2xl font-bold text-gray-900">Registered users</h2>
+              </div>
+              <Link
+                href="/login/admin/announcements"
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: 'var(--nwd-teal)' }}
+              >
+                + New Announcement
+              </Link>
+            </div>
 
             {resetResult && (
               <div className="mb-6 rounded-lg p-4 border" style={{ background: 'color-mix(in srgb, #10b981 8%, white)', borderColor: '#6ee7b7' }}>
