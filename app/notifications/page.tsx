@@ -287,6 +287,31 @@ function NotificationsContent() {
           </div>
         )}
 
+        <div className="flex gap-2 mb-6 border-b flex-shrink-0" style={{ borderColor: 'var(--nwd-border)' }}>
+          {CATEGORIES.map(({ key, label }) => {
+            const isActive = activeCategory === key
+            const unread = categoryCounts[key]
+            return (
+              <button
+                key={key}
+                onClick={() => { setActiveCategory(key); setSelectedKey(null) }}
+                className="px-4 py-2.5 text-sm font-semibold cursor-pointer transition-colors relative -mb-px border-b-2"
+                style={{ borderColor: isActive ? 'var(--nwd-teal)' : 'transparent', color: isActive ? 'var(--nwd-teal)' : '#6b7280' }}
+              >
+                {label}
+                {unread > 0 && (
+                  <span
+                    className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full"
+                    style={{ color: 'var(--nwd-purple)', background: 'color-mix(in srgb, var(--nwd-purple) 12%, transparent)', fontFamily: 'var(--font-geist-mono)' }}
+                  >
+                    {unread}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 rounded-full border-[3px] border-gray-200 border-t-gray-600 animate-spin" />
@@ -299,24 +324,6 @@ function NotificationsContent() {
               className={`${selectedKey ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 flex-shrink-0 border-r flex-col`}
               style={{ borderColor: 'var(--nwd-border)' }}
             >
-              <div className="flex border-b flex-shrink-0" style={{ borderColor: 'var(--nwd-border)' }}>
-                {CATEGORIES.map(({ key, label }) => {
-                  const isActive = activeCategory === key
-                  const unread = categoryCounts[key]
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => { setActiveCategory(key); setSelectedKey(null) }}
-                      className="flex-1 px-2 py-3 text-xs font-semibold cursor-pointer transition-colors border-b-2 truncate"
-                      style={{ borderColor: isActive ? 'var(--nwd-teal)' : 'transparent', color: isActive ? 'var(--nwd-teal)' : '#6b7280' }}
-                    >
-                      {label}
-                      {unread > 0 && <span className="ml-1" style={{ color: 'var(--nwd-purple)' }}>({unread})</span>}
-                    </button>
-                  )
-                })}
-              </div>
-
               <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
                 {listItems.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-10 px-4">Nothing here.</p>
