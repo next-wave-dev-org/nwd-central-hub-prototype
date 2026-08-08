@@ -31,6 +31,13 @@ const ROLE_LABELS: Record<UserRole, string> = {
   contractor: 'Contractors',
 }
 
+// Matches the RoleBadge convention in app/login/admin/users/page.tsx.
+const ROLE_COLORS: Record<UserRole, string> = {
+  contractor: 'var(--nwd-teal)',
+  client: 'var(--nwd-purple)',
+  admin: '#6b7280',
+}
+
 function AdminAnnouncementsContent() {
   const { profile } = useAuth()
 
@@ -250,7 +257,7 @@ function AdminAnnouncementsContent() {
                 <div key={announcement.id} className="border rounded-lg p-4" style={{ borderColor: 'var(--nwd-border)' }}>
                   <div onClick={() => toggleReceipts(announcement)} className="cursor-pointer">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-gray-900">{announcement.title}</span>
+                      <span className="text-sm font-semibold text-gray-900 min-w-0 truncate">{announcement.title}</span>
                       <span className="text-xs text-gray-300 flex-shrink-0">
                         {new Date(announcement.created_at).toLocaleString('en-US', {
                           month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -263,8 +270,8 @@ function AdminAnnouncementsContent() {
                           key={role}
                           className="text-xs font-semibold tracking-wider px-2 py-0.5 rounded"
                           style={{
-                            color: 'var(--nwd-teal)',
-                            background: 'color-mix(in srgb, var(--nwd-teal) 12%, transparent)',
+                            color: ROLE_COLORS[role],
+                            background: `color-mix(in srgb, ${ROLE_COLORS[role]} 12%, transparent)`,
                             fontFamily: 'var(--font-geist-mono)',
                           }}
                         >
@@ -277,7 +284,7 @@ function AdminAnnouncementsContent() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap break-words mt-2 line-clamp-2">
+                    <p className={`text-sm text-gray-600 leading-relaxed whitespace-pre-wrap break-words mt-2 ${isExpanded ? '' : 'line-clamp-2'}`}>
                       {announcement.body}
                     </p>
                   </div>
