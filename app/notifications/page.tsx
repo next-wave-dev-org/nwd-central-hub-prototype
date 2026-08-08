@@ -370,40 +370,48 @@ function NotificationsContent() {
                     >
                       ← Back
                     </button>
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <h2 className="text-lg font-bold text-gray-900 leading-snug">{selectedItem.representative.title}</h2>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {activeCategory === 'system' && selectedItem.representative.link && (
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <h2 className="text-lg font-bold text-gray-900 leading-snug min-w-0 truncate">{selectedItem.representative.title}</h2>
+                      <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+                        {activeCategory === 'system' && selectedItem.representative.link && (
+                          <button
+                            onClick={() => router.push(selectedItem.representative.link!)}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors cursor-pointer"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 3H3v10h10v-3M9 2h5v5M13.5 2.5L7 9" />
+                            </svg>
+                            View
+                          </button>
+                        )}
                         <button
-                          onClick={() => router.push(selectedItem.representative.link!)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 cursor-pointer"
-                          style={{ borderColor: 'var(--nwd-sky)', color: 'var(--nwd-sky)', background: 'color-mix(in srgb, var(--nwd-sky) 8%, white)' }}
+                          onClick={togglePin}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors cursor-pointer"
                         >
-                          View
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M8 1a1 1 0 011 1v4.382l2.447 1.223A1 1 0 0112 9v1a1 1 0 01-1 1H9v3a1 1 0 11-2 0v-3H5a1 1 0 01-1-1V9a1 1 0 01.553-.895L7 6.882V2a1 1 0 011-1z" />
+                          </svg>
+                          {selectedItem.isPinned ? 'Unpin' : 'Pin'}
                         </button>
-                      )}
-                      <button
-                        onClick={togglePin}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 cursor-pointer"
-                        style={{ borderColor: 'var(--nwd-purple)', color: 'var(--nwd-purple)', background: 'color-mix(in srgb, var(--nwd-purple) 8%, white)' }}
-                      >
-                        {selectedItem.isPinned ? 'Unpin' : 'Pin'}
-                      </button>
-                      <button
-                        onClick={toggleReadState}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 cursor-pointer"
-                        style={{ borderColor: '#6b7280', color: '#6b7280', background: 'color-mix(in srgb, #6b7280 8%, white)' }}
-                      >
-                        {selectedItem.isUnread ? 'Mark read' : 'Mark unread'}
-                      </button>
-                      <button
-                        onClick={deleteSelected}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 cursor-pointer"
-                        style={{ borderColor: '#f43f5e', color: '#f43f5e', background: 'color-mix(in srgb, #f43f5e 8%, white)' }}
-                      >
-                        Delete
-                      </button>
+                        <button
+                          onClick={toggleReadState}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 4h12v8H2V4zm0 0l6 5 6-5" />
+                          </svg>
+                          {selectedItem.isUnread ? 'Mark read' : 'Mark unread'}
+                        </button>
+                        <button
+                          onClick={deleteSelected}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h10M6 4V2.5A.5.5 0 016.5 2h3a.5.5 0 01.5.5V4m-7 0l.5 9a1 1 0 001 1h6a1 1 0 001-1l.5-9" />
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
 
