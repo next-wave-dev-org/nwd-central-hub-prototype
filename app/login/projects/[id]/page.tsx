@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
@@ -8,6 +8,9 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 
 const MESSAGE_POLL_INTERVAL_MS = 8000
+// Matches the project_messages.content CHECK constraint (docs/database-schema.md)
+// and the limit PR #119 uses for direct_messages/announcements bodies.
+const MESSAGE_MAX_LENGTH = 5000
 
 // Minimal, dependency-free formatter for project descriptions: paragraphs
 // (blank-line separated, single newlines kept as line breaks), #/##/###
@@ -81,6 +84,16 @@ function parseDescriptionBlocks(source: string): DescriptionBlock[] {
 
 const INLINE_REGEX = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*/g
 
+// Allowlist http(s)/mailto/relative links; rejects javascript: and other
+// script-executing schemes that a submitted description could smuggle in.
+function isSafeHref(href: string): boolean {
+  const trimmed = href.trim()
+  const schemeMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/)
+  if (!schemeMatch) return true
+  const scheme = schemeMatch[1].toLowerCase()
+  return scheme === 'http' || scheme === 'https' || scheme === 'mailto'
+}
+
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = []
   let lastIndex = 0
@@ -92,18 +105,22 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index))
 
     if (match[1] !== undefined) {
-      nodes.push(
-        <a
-          key={`${keyPrefix}-${key++}`}
-          href={match[2]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-          style={{ color: 'var(--nwd-purple)' }}
-        >
-          {match[1]}
-        </a>
-      )
+      if (isSafeHref(match[2])) {
+        nodes.push(
+          <a
+            key={`${keyPrefix}-${key++}`}
+            href={match[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+            style={{ color: 'var(--nwd-purple)' }}
+          >
+            {match[1]}
+          </a>
+        )
+      } else {
+        nodes.push(match[1])
+      }
     } else if (match[3] !== undefined) {
       nodes.push(
         <strong key={`${keyPrefix}-${key++}`} className="font-semibold text-gray-900">
@@ -219,6 +236,8 @@ function ProjectWorkspaceContent() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const messageListRef = useRef<HTMLDivElement>(null)
+  const prevMessageCountRef = useRef(0)
+  const fetchSeqRef = useRef(0)
 
   useEffect(() => {
     if (!id) return
@@ -245,35 +264,45 @@ function ProjectWorkspaceContent() {
     fetchProject()
   }, [id])
 
-  useEffect(() => {
+  // Guarded by fetchSeqRef so an in-flight fetch that resolves out of order
+  // (e.g. a poll landing after sendMessage's refetch) can't clobber newer data.
+  const fetchMessages = useCallback(async () => {
     if (!id) return
+    const seq = ++fetchSeqRef.current
 
-    let cancelled = false
+    const { data } = await supabase
+      .from('project_messages')
+      .select('id, content, created_at, sender_id, profiles!sender_id(name, role)')
+      .eq('project_id', id)
+      .order('created_at', { ascending: true })
 
-    const fetchMessages = async () => {
-      const { data } = await supabase
-        .from('project_messages')
-        .select('id, content, created_at, sender_id, profiles!sender_id(name, role)')
-        .eq('project_id', id)
-        .order('created_at', { ascending: true })
-
-      if (!cancelled && data) {
-        setMessages(data as unknown as ProjectMessage[])
-      }
-    }
-
-    fetchMessages()
-    const intervalId = setInterval(fetchMessages, MESSAGE_POLL_INTERVAL_MS)
-
-    return () => {
-      cancelled = true
-      clearInterval(intervalId)
+    if (seq === fetchSeqRef.current && data) {
+      setMessages(data as unknown as ProjectMessage[])
     }
   }, [id])
 
   useEffect(() => {
+    if (!id) return
+
+    fetchMessages()
+    const intervalId = setInterval(fetchMessages, MESSAGE_POLL_INTERVAL_MS)
+
+    return () => clearInterval(intervalId)
+  }, [id, fetchMessages])
+
+  useEffect(() => {
     const el = messageListRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    const prevCount = prevMessageCountRef.current
+    prevMessageCountRef.current = messages.length
+
+    if (!el || messages.length === prevCount) return
+
+    const isInitialLoad = prevCount === 0
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+
+    if (isInitialLoad || isNearBottom) {
+      el.scrollTop = el.scrollHeight
+    }
   }, [messages])
 
   const isUnassignedContractor =
@@ -284,6 +313,11 @@ function ProjectWorkspaceContent() {
   const sendMessage = async () => {
     const content = newMessage.trim()
     if (!content || !profile?.id || sending) return
+
+    if (content.length > MESSAGE_MAX_LENGTH) {
+      setSendError(`Message must be ${MESSAGE_MAX_LENGTH} characters or fewer.`)
+      return
+    }
 
     setSending(true)
     setSendError(null)
@@ -303,15 +337,7 @@ function ProjectWorkspaceContent() {
     setNewMessage('')
     setSending(false)
 
-    const { data } = await supabase
-      .from('project_messages')
-      .select('id, content, created_at, sender_id, profiles!sender_id(name, role)')
-      .eq('project_id', id)
-      .order('created_at', { ascending: true })
-
-    if (data) {
-      setMessages(data as unknown as ProjectMessage[])
-    }
+    await fetchMessages()
   }
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -397,7 +423,7 @@ function ProjectWorkspaceContent() {
 
                 <div ref={messageListRef} className="max-h-96 overflow-y-auto flex flex-col gap-4 mb-4 pr-1">
                   {messages.length === 0 ? (
-                    <p className="text-sm text-gray-400">Join project to view messages</p>
+                    <p className="text-sm text-gray-400">No messages yet.</p>
                   ) : (
                     messages.map((message) => (
                       <div key={message.id} className="text-sm">
@@ -446,7 +472,9 @@ function ProjectWorkspaceContent() {
                         onChange={(e) => setNewMessage(e.target.value)}
                         onKeyDown={handleMessageInputKeyDown}
                         placeholder="Write a message"
+                        aria-label="Write a message"
                         rows={3}
+                        maxLength={MESSAGE_MAX_LENGTH}
                         className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 bg-white text-gray-900"
                         style={{ borderColor: 'var(--nwd-border)', resize: 'vertical' }}
                       />

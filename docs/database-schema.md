@@ -234,11 +234,13 @@ created_at      timestamptz DEFAULT now()
 
 In-project messaging (#56). One thread per project, shared by the client, assigned contractor(s), and admin.
 
+**Overlap with PR #119:** #119 (the notifications/direct-messaging system, #57) independently re-implemented this same table plus a rewrite of `app/login/projects/[id]/page.tsx`, to attach a `notify_project_message_recipients` trigger. The two never merged in either direction, so they'll conflict — decided to land this branch (#118) first, since it already carries the reviewed workspace UI (Client card, markdown descriptions, layout, unassigned-contractor composer hide) that #119 doesn't have. When #119 is picked back up: drop its `CREATE TABLE public.project_messages` and its `app/login/projects/[id]/page.tsx` messaging changes (table and page will already exist from this branch), keep everything else (`notifications`, `announcements`, `direct_messages`), and re-point its `notify_project_message_recipients` trigger at the table created here — the trigger function itself only touches `project_id`/`sender_id`/`content`, so it needs no changes. Also drop #119's own `project_messages_content_length` CHECK — added here instead (below) so it exists regardless of merge order.
+
 ```sql
 id          uuid        PRIMARY KEY DEFAULT gen_random_uuid()
 project_id  uuid        NOT NULL REFERENCES projects(id) ON DELETE CASCADE
 sender_id   uuid        NOT NULL REFERENCES profiles(id)
-content     text        NOT NULL
+content     text        NOT NULL CHECK (char_length(content) <= 5000)
 created_at  timestamptz DEFAULT now()
 ```
 
@@ -247,6 +249,7 @@ created_at  timestamptz DEFAULT now()
 - No `role` column. The sender's role is resolved by joining to `profiles.role` at read time, not captured at send time — if a user's role changes after posting, older messages reflect their *current* role, not the role they held when they sent the message. Decided this way because it matches the drafted schema exactly and role changes are rare; revisit if that assumption stops holding.
 - No UPDATE/DELETE policies — messages are immutable (post + read only).
 - Delivery to other participants is via polling refetch from the client (`app/login/projects/[id]/page.tsx`), not Supabase Realtime — this is the first messaging feature in the app, and polling avoids introducing subscription/connection-cleanup machinery for MVP.
+- `content` is capped at 5000 characters (matches the limit #119 uses for `direct_messages`/`announcements` bodies, kept in sync here since either PR could land first) and enforced client-side too (`MESSAGE_MAX_LENGTH` in `app/login/projects/[id]/page.tsx`).
 
 **Correction:** the first version of this migration omitted the table-level `GRANT`, and inserting failed with `permission denied for table project_messages` even though the INSERT policy was correct — RLS only applies after the base table-level privilege check passes. Every other table in this project was originally created through the Supabase dashboard, which auto-grants `authenticated`/`anon`/`service_role` on creation; this table was the first created via raw SQL (`db:exec`/SQL editor), which does not. Fixed by adding an explicit `GRANT` (included below). Any future table created the same way needs the same explicit grant.
 
@@ -257,7 +260,7 @@ CREATE TABLE public.project_messages (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id  uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   sender_id   uuid NOT NULL REFERENCES public.profiles(id),
-  content     text NOT NULL,
+  content     text NOT NULL CHECK (char_length(content) <= 5000),
   created_at  timestamptz DEFAULT now()
 );
 
