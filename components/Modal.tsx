@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 type ModalProps = {
   title: string
@@ -9,6 +9,12 @@ type ModalProps = {
 }
 
 export default function Modal({ title, onClose, children }: ModalProps) {
+  // Tracks whether the mousedown that led to this click actually started on
+  // the backdrop itself — otherwise a text-selection drag that starts inside
+  // the dialog and is released over the backdrop would dismiss the modal,
+  // since the resulting click event's target is the backdrop either way.
+  const mouseDownOnBackdropRef = useRef(false)
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -21,7 +27,10 @@ export default function Modal({ title, onClose, children }: ModalProps) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ background: 'color-mix(in srgb, black 40%, transparent)' }}
-      onClick={onClose}
+      onMouseDown={(e) => { mouseDownOnBackdropRef.current = e.target === e.currentTarget }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && mouseDownOnBackdropRef.current) onClose()
+      }}
     >
       <div
         role="dialog"

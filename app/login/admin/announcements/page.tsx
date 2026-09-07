@@ -102,12 +102,16 @@ function AdminAnnouncementsContent() {
     setSending(true)
     setSendError(null)
 
-    const { error } = await supabase.from('announcements').insert({
-      sender_id: profile.id,
-      title: trimmedTitle,
-      body: trimmedBody,
-      target_roles: targetRoles,
-    })
+    const { data, error } = await supabase
+      .from('announcements')
+      .insert({
+        sender_id: profile.id,
+        title: trimmedTitle,
+        body: trimmedBody,
+        target_roles: targetRoles,
+      })
+      .select('id')
+      .single()
 
     if (error) {
       setSendError(error.message)
@@ -119,7 +123,7 @@ function AdminAnnouncementsContent() {
     setTitle('')
     setBody('')
     setTargetRoles([])
-    notifyAnnouncementByEmail(targetRoles, trimmedTitle, trimmedBody)
+    notifyAnnouncementByEmail(data.id)
     await fetchAnnouncements()
   }
 

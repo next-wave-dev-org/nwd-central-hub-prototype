@@ -316,9 +316,14 @@ function NotificationsContent() {
       : 'Delete this message? This cannot be undone.'
     if (!confirm(confirmMessage)) return
     const ids = selectedItem.memberIds
+    const removed = notifications.filter((n) => ids.includes(n.id))
     setNotifications((prev) => prev.filter((n) => !ids.includes(n.id)))
     setSelectedKey(null)
-    await supabase.from('notifications').delete().in('id', ids)
+    const { error } = await supabase.from('notifications').delete().in('id', ids)
+    if (error) {
+      setError(error.message)
+      setNotifications((prev) => [...prev, ...removed])
+    }
   }
 
   async function sendReply() {
@@ -336,13 +341,17 @@ function NotificationsContent() {
 
     const replyTitle = `Re: ${item.representative.title}`.slice(0, TITLE_MAX_LENGTH)
 
-    const { error } = await supabase.from('direct_messages').insert({
-      sender_id: profile.id,
-      recipient_id: item.representative.sender_id,
-      thread_id: item.key,
-      title: replyTitle,
-      content: trimmed,
-    })
+    const { data, error } = await supabase
+      .from('direct_messages')
+      .insert({
+        sender_id: profile.id,
+        recipient_id: item.representative.sender_id,
+        thread_id: item.key,
+        title: replyTitle,
+        content: trimmed,
+      })
+      .select('id')
+      .single()
 
     if (error) {
       setReplyError(error.message)
@@ -354,7 +363,7 @@ function NotificationsContent() {
     setReplyContent('')
     shouldScrollToBottomRef.current = true
     fetchThread(item.key)
-    notifyDirectMessageByEmail(participantIds.filter((id) => id !== profile.id), replyTitle, trimmed)
+    notifyDirectMessageByEmail(data.id)
   }
 
   async function handleAddUsersConfirm(users: UserProfile[]) {

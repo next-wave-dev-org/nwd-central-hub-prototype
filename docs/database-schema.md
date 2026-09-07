@@ -491,18 +491,18 @@ created_at    timestamptz NOT NULL DEFAULT now()
 
 ## Notifications System Migration (apply by hand, in this order)
 
-This is one migration, ordered because later statements depend on earlier ones (`notifications` references both `direct_messages` and `announcements`; every trigger function references `notifications`).
+This is one migration, ordered because later statements depend on earlier ones (`notifications` references both `direct_messages` and `announcements`; every trigger function references `notifications`). Every statement is guarded (`IF [NOT] EXISTS`, `DROP POLICY`/`DROP TRIGGER` before `CREATE`, `CREATE OR REPLACE FUNCTION`) so the whole block is safe to re-run end-to-end, including after a partial failure.
 
 ```sql
 -- 1. direct_messages: add title, retire read_at (state moves to notifications)
-ALTER TABLE public.direct_messages ADD COLUMN title text NOT NULL DEFAULT 'Message';
-ALTER TABLE public.direct_messages DROP COLUMN read_at;
+ALTER TABLE public.direct_messages ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT 'Message';
+ALTER TABLE public.direct_messages DROP COLUMN IF EXISTS read_at;
 DROP POLICY IF EXISTS "Recipients can mark their messages read" ON public.direct_messages;
 DROP POLICY IF EXISTS "Recipients can delete their messages" ON public.direct_messages;
 REVOKE UPDATE, DELETE ON public.direct_messages FROM authenticated;
 
 -- 2. announcements
-CREATE TABLE public.announcements (
+CREATE TABLE IF NOT EXISTS public.announcements (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   sender_id    uuid NOT NULL REFERENCES public.profiles(id),
   title        text NOT NULL,
@@ -514,10 +514,12 @@ CREATE TABLE public.announcements (
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, DELETE ON public.announcements TO authenticated;
 
+DROP POLICY IF EXISTS "Admins can view announcements" ON public.announcements;
 CREATE POLICY "Admins can view announcements"
 ON public.announcements FOR SELECT TO authenticated
 USING (public.get_my_role() = 'admin');
 
+DROP POLICY IF EXISTS "Admins can send announcements" ON public.announcements;
 CREATE POLICY "Admins can send announcements"
 ON public.announcements FOR INSERT TO authenticated
 WITH CHECK (sender_id = auth.uid() AND public.get_my_role() = 'admin');
@@ -525,12 +527,13 @@ WITH CHECK (sender_id = auth.uid() AND public.get_my_role() = 'admin');
 -- Deleting an announcement cascades to every fanned-out notifications row
 -- (announcement_id references this table ON DELETE CASCADE), removing it from
 -- every recipient's inbox too, not just the admin's sent list.
+DROP POLICY IF EXISTS "Admins can delete announcements" ON public.announcements;
 CREATE POLICY "Admins can delete announcements"
 ON public.announcements FOR DELETE TO authenticated
 USING (public.get_my_role() = 'admin');
 
 -- 3. notifications
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   recipient_id       uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   sender_id          uuid REFERENCES public.profiles(id),
@@ -546,22 +549,30 @@ CREATE TABLE public.notifications (
   created_at         timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX ON public.notifications (recipient_id, created_at);
+CREATE INDEX IF NOT EXISTS notifications_recipient_id_created_at_idx ON public.notifications (recipient_id, created_at);
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- No INSERT grant — every row is written by a SECURITY DEFINER trigger function.
-GRANT SELECT, UPDATE, DELETE ON public.notifications TO authenticated;
+-- UPDATE is column-restricted to read_at/pinned_at (mirrors the profiles.email_notifications
+-- grant) so a recipient can mark read/pinned but can't rewrite body/link/category/sender_id
+-- on their own rows. REVOKE first so this is safe to re-run after the old blanket grant.
+REVOKE UPDATE ON public.notifications FROM authenticated;
+GRANT SELECT, DELETE ON public.notifications TO authenticated;
+GRANT UPDATE (read_at, pinned_at) ON public.notifications TO authenticated;
 
+DROP POLICY IF EXISTS "Recipients can view their own notifications" ON public.notifications;
 CREATE POLICY "Recipients can view their own notifications"
 ON public.notifications FOR SELECT TO authenticated
 USING (recipient_id = auth.uid());
 
+DROP POLICY IF EXISTS "Recipients can update their own notifications" ON public.notifications;
 CREATE POLICY "Recipients can update their own notifications"
 ON public.notifications FOR UPDATE TO authenticated
 USING (recipient_id = auth.uid())
 WITH CHECK (recipient_id = auth.uid());
 
+DROP POLICY IF EXISTS "Recipients can delete their own notifications" ON public.notifications;
 CREATE POLICY "Recipients can delete their own notifications"
 ON public.notifications FOR DELETE TO authenticated
 USING (recipient_id = auth.uid());
@@ -597,11 +608,13 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_direct_message_recipient ON public.direct_messages;
 CREATE TRIGGER trg_notify_direct_message_recipient
 AFTER INSERT ON public.direct_messages
 FOR EACH ROW EXECUTE FUNCTION public.notify_direct_message_recipient();
 
--- 5. announcements -> notifications (fan-out to every targeted role)
+-- 5. announcements -> notifications (fan-out to every targeted role, excluding
+-- the sending admin themselves even when 'admin' is one of the target roles)
 CREATE OR REPLACE FUNCTION public.notify_announcement_recipients()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -612,11 +625,12 @@ BEGIN
   INSERT INTO public.notifications (recipient_id, sender_id, category, title, body, announcement_id)
   SELECT id, NEW.sender_id, 'announcement', NEW.title, NEW.body, NEW.id
   FROM public.profiles
-  WHERE role = ANY(NEW.target_roles);
+  WHERE role = ANY(NEW.target_roles) AND id != NEW.sender_id;
   RETURN NEW;
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_announcement_recipients ON public.announcements;
 CREATE TRIGGER trg_notify_announcement_recipients
 AFTER INSERT ON public.announcements
 FOR EACH ROW EXECUTE FUNCTION public.notify_announcement_recipients();
@@ -639,7 +653,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.get_announcement_read_receipts(uuid) TO authenticated;
 
 -- 7. project_messages (re-implemented fresh; see the note under its table section above)
-CREATE TABLE public.project_messages (
+CREATE TABLE IF NOT EXISTS public.project_messages (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id  uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   sender_id   uuid NOT NULL REFERENCES public.profiles(id),
@@ -647,7 +661,7 @@ CREATE TABLE public.project_messages (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX ON public.project_messages (project_id, created_at);
+CREATE INDEX IF NOT EXISTS project_messages_project_id_created_at_idx ON public.project_messages (project_id, created_at);
 
 ALTER TABLE public.project_messages ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT ON public.project_messages TO authenticated;
@@ -665,6 +679,7 @@ AS $$
   );
 $$;
 
+DROP POLICY IF EXISTS "Project members can view messages" ON public.project_messages;
 CREATE POLICY "Project members can view messages"
 ON public.project_messages FOR SELECT TO authenticated
 USING (
@@ -673,6 +688,7 @@ USING (
   OR public.get_my_role() = 'admin'
 );
 
+DROP POLICY IF EXISTS "Project members can post messages" ON public.project_messages;
 CREATE POLICY "Project members can post messages"
 ON public.project_messages FOR INSERT TO authenticated
 WITH CHECK (
@@ -716,6 +732,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_project_message_recipients ON public.project_messages;
 CREATE TRIGGER trg_notify_project_message_recipients
 AFTER INSERT ON public.project_messages
 FOR EACH ROW EXECUTE FUNCTION public.notify_project_message_recipients();
@@ -736,6 +753,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_admins_new_proposal ON public.proposals;
 CREATE TRIGGER trg_notify_admins_new_proposal
 AFTER INSERT ON public.proposals
 FOR EACH ROW EXECUTE FUNCTION public.notify_admins_new_proposal();
@@ -759,6 +777,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_client_proposal_status ON public.proposals;
 CREATE TRIGGER trg_notify_client_proposal_status
 AFTER UPDATE OF status ON public.proposals
 FOR EACH ROW EXECUTE FUNCTION public.notify_client_proposal_status();
@@ -782,6 +801,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_admins_new_request ON public.proposal_requests;
 CREATE TRIGGER trg_notify_admins_new_request
 AFTER INSERT ON public.proposal_requests
 FOR EACH ROW EXECUTE FUNCTION public.notify_admins_new_request();
@@ -811,6 +831,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_contractor_request_rejected ON public.proposal_requests;
 CREATE TRIGGER trg_notify_contractor_request_rejected
 AFTER UPDATE OF status ON public.proposal_requests
 FOR EACH ROW EXECUTE FUNCTION public.notify_contractor_request_rejected();
@@ -855,6 +876,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_contractor_joined ON public.contractor_projects;
 CREATE TRIGGER trg_notify_contractor_joined
 AFTER INSERT ON public.contractor_projects
 FOR EACH ROW EXECUTE FUNCTION public.notify_contractor_joined();
@@ -886,6 +908,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_notify_client_assigned ON public.projects;
 CREATE TRIGGER trg_notify_client_assigned
 AFTER INSERT OR UPDATE OF client_id ON public.projects
 FOR EACH ROW EXECUTE FUNCTION public.notify_client_assigned();
@@ -908,6 +931,8 @@ ALTER TABLE public.announcements ADD CONSTRAINT announcements_body_length CHECK 
 ALTER TABLE public.project_messages DROP CONSTRAINT IF EXISTS project_messages_content_length;
 ALTER TABLE public.project_messages ADD CONSTRAINT project_messages_content_length CHECK (char_length(content) <= 5000);
 ```
+
+**Note on trigger fan-out failure coupling:** every `notify_*` function above runs inside the same transaction as the user action that fired it (the DM insert, the proposal approval, etc.), not in a separate deferred job. An unhandled error in any of them — e.g. a `notifications` CHECK violation, a bad `FROM public.profiles` join — rolls back and fails the underlying action for the acting user, not just the notification. This is a deliberate simplification (no queue/worker infrastructure in this app), not an oversight; if a specific trigger turns out to be a reliability risk in practice, wrap its body in `BEGIN ... EXCEPTION WHEN OTHERS THEN NULL; END;` to make that one fan-out best-effort.
 
 ---
 
@@ -1095,6 +1120,7 @@ WITH CHECK (id = auth.uid());
 **Notes:**
 - Checked by `email_notifications != false` (not `= true`) wherever emails are sent, so existing rows (which get `DEFAULT true` on the ALTER) and any future NULL are treated as opted-in.
 - Email sending happens from server actions (`lib/email/notificationActions.ts`), called right after the client-side insert succeeds in `SendMessageModal`, the notifications page's reply flow, and the announcements composer — not from a DB trigger, since Postgres can't call the Resend API directly and this app has no webhook/edge-function bridge configured. This makes email best-effort: if the browser tab closes or the network drops between the DB write succeeding and the follow-up server action call, the in-app notification still exists (source of truth) but the email won't send. Acceptable for a supplementary channel; revisit with a DB webhook if that gap matters later.
+- The client passes only the id of the row it just inserted (`direct_messages.id` / `announcements.id`), never recipients or content directly — the action re-authenticates the caller (`lib/supabase-server.ts`'s cookie-bound client + `auth.getUser()`), re-fetches the row under RLS, and confirms `sender_id` matches before deriving who to email and what to send. This closes off using these actions as an open mail relay (arbitrary recipients/content from an authenticated-but-unrelated caller). `heading`/`body` are HTML-escaped in `sendNotificationEmail.ts` before interpolation, since they're user-submitted DM/announcement text.
 
 ---
 

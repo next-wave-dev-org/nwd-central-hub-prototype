@@ -87,9 +87,10 @@ export default function SendMessageModal({ onClose, recipients }: SendMessageMod
       }
     }
 
+    await notifyDirectMessageByEmail(data.id)
+
     setSending(false)
     setSent(true)
-    notifyDirectMessageByEmail(recipients.map((r) => r.id), trimmedTitle, trimmedContent)
   }
 
   if (sent) {
