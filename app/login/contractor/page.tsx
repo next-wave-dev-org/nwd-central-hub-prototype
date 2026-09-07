@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
@@ -12,10 +12,47 @@ type Project = {
   title: string
   description: string
   budget: string | null
+  created_at: string | null
 }
 
 type RequestStatus = 'pending' | 'approved' | 'rejected'
 type RequestMap = Record<string, RequestStatus>
+
+type SortCol = 'title' | 'budget' | 'status' | 'created'
+type SortDir = 'asc' | 'desc'
+
+function budgetValue(budget: string | null): number {
+  if (!budget) return -1
+  const n = parseFloat(budget.replace(/[^0-9.-]/g, ''))
+  return Number.isNaN(n) ? -1 : n
+}
+
+function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol | null; sortDir: SortDir }) {
+  const active = sortCol === col
+  const color = active ? 'var(--nwd-teal)' : '#d1d5db'
+  return (
+    <svg className="inline-block ml-1 w-3 h-3 flex-shrink-0" viewBox="0 0 10 12" fill="none" aria-hidden>
+      <path d="M5 1L2 4.5h6L5 1z" fill={active && sortDir === 'asc' ? color : '#d1d5db'} />
+      <path d="M5 11L8 7.5H2L5 11z" fill={active && sortDir === 'desc' ? color : '#d1d5db'} />
+    </svg>
+  )
+}
+
+const ACTIVE_COLUMNS: { label: string; key: SortCol | null }[] = [
+  { label: 'Title',   key: 'title' },
+  { label: 'Budget',  key: 'budget' },
+  { label: 'Status',  key: null },
+  { label: 'Created', key: 'created' },
+  { label: 'Actions', key: null },
+]
+
+const AVAILABLE_COLUMNS: { label: string; key: SortCol | null }[] = [
+  { label: 'Title',   key: 'title' },
+  { label: 'Budget',  key: 'budget' },
+  { label: 'Status',  key: 'status' },
+  { label: 'Created', key: 'created' },
+  { label: 'Actions', key: null },
+]
 
 const REQUEST_STATUS_STYLES: Record<'available' | RequestStatus, { color: string; label: string }> = {
   available: { color: '#6b7280', label: 'Available' },
@@ -64,6 +101,10 @@ function ContractorContent() {
   const [requesting, setRequesting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [activeSortCol, setActiveSortCol] = useState<SortCol | null>(null)
+  const [activeSortDir, setActiveSortDir] = useState<SortDir>('asc')
+  const [availableSortCol, setAvailableSortCol] = useState<SortCol | null>(null)
+  const [availableSortDir, setAvailableSortDir] = useState<SortDir>('asc')
 
   useEffect(() => {
     if (!profile) return
@@ -85,7 +126,7 @@ function ContractorContent() {
         .eq('contractor_id', profile!.id),
       supabase
         .from('projects')
-        .select('id, title, description, budget'),
+        .select('id, title, description, budget, created_at'),
       supabase
         .from('proposal_requests')
         .select('project_id, status')
@@ -127,6 +168,57 @@ function ContractorContent() {
     }
     setRequesting(null)
   }
+
+  function toggleActiveSort(col: SortCol) {
+    if (activeSortCol === col) {
+      setActiveSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setActiveSortCol(col)
+      setActiveSortDir('asc')
+    }
+  }
+
+  function toggleAvailableSort(col: SortCol) {
+    if (availableSortCol === col) {
+      setAvailableSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setAvailableSortCol(col)
+      setAvailableSortDir('asc')
+    }
+  }
+
+  const sortedActiveProjects = useMemo(() => {
+    if (!activeSortCol) return activeProjects
+    const result = [...activeProjects]
+    result.sort((a, b) => {
+      if (activeSortCol === 'budget') {
+        const diff = budgetValue(a.budget) - budgetValue(b.budget)
+        return activeSortDir === 'asc' ? diff : -diff
+      }
+      let av = '', bv = ''
+      if (activeSortCol === 'title')   { av = a.title.toLowerCase(); bv = b.title.toLowerCase() }
+      if (activeSortCol === 'created') { av = a.created_at ?? '';    bv = b.created_at ?? '' }
+      return activeSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    })
+    return result
+  }, [activeProjects, activeSortCol, activeSortDir])
+
+  const sortedAvailableProjects = useMemo(() => {
+    if (!availableSortCol) return availableProjects
+    const result = [...availableProjects]
+    result.sort((a, b) => {
+      if (availableSortCol === 'budget') {
+        const diff = budgetValue(a.budget) - budgetValue(b.budget)
+        return availableSortDir === 'asc' ? diff : -diff
+      }
+      let av = '', bv = ''
+      if (availableSortCol === 'title')   { av = a.title.toLowerCase();                        bv = b.title.toLowerCase() }
+      if (availableSortCol === 'status')  { av = requestMap[a.id] ?? 'available';               bv = requestMap[b.id] ?? 'available' }
+      if (availableSortCol === 'created') { av = a.created_at ?? '';                            bv = b.created_at ?? '' }
+      return availableSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    })
+    return result
+  }, [availableProjects, availableSortCol, availableSortDir, requestMap])
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -183,19 +275,25 @@ function ContractorContent() {
               <table className="min-w-full divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
                 <thead>
                   <tr style={{ background: 'var(--nwd-surface)' }}>
-                    {['Title', 'Budget', 'Status', 'Actions'].map((label) => (
+                    {ACTIVE_COLUMNS.map(({ label, key }) => (
                       <th
                         key={label}
-                        className={`px-4 py-3 text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap ${label === 'Actions' ? 'text-right' : 'text-left'}`}
+                        className={[
+                          'px-4 py-3 text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap',
+                          label === 'Actions' ? 'text-right' : 'text-left',
+                          key ? 'cursor-pointer select-none hover:text-gray-700' : '',
+                        ].join(' ')}
                         style={{ fontFamily: 'var(--font-geist-mono)' }}
+                        onClick={() => key && toggleActiveSort(key)}
                       >
                         {label}
+                        {key && <SortIcon col={key} sortCol={activeSortCol} sortDir={activeSortDir} />}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
-                  {activeProjects.map((project) => {
+                  {sortedActiveProjects.map((project) => {
                     const isExpanded = expandedId === project.id
 
                     return (
@@ -240,6 +338,11 @@ function ContractorContent() {
                           <td className="px-4 py-3 whitespace-nowrap">
                             <ActiveStatusBadge />
                           </td>
+                          <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap" style={{ fontFamily: 'var(--font-geist-mono)' }}>
+                            {project.created_at
+                              ? new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                              : '—'}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex justify-end">
                               <span className="text-xs text-gray-300">—</span>
@@ -250,7 +353,7 @@ function ContractorContent() {
                         {isExpanded && (
                           <tr style={{ background: 'color-mix(in srgb, var(--nwd-teal) 5%, white)', borderTop: 'none' }}>
                             <td
-                              colSpan={4}
+                              colSpan={5}
                               className="px-6 py-4"
                               style={{ borderTop: '1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)' }}
                             >
@@ -296,19 +399,25 @@ function ContractorContent() {
               <table className="min-w-full divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
                 <thead>
                   <tr style={{ background: 'var(--nwd-surface)' }}>
-                    {['Title', 'Budget', 'Status', 'Actions'].map((label) => (
+                    {AVAILABLE_COLUMNS.map(({ label, key }) => (
                       <th
                         key={label}
-                        className={`px-4 py-3 text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap ${label === 'Actions' ? 'text-right' : 'text-left'}`}
+                        className={[
+                          'px-4 py-3 text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap',
+                          label === 'Actions' ? 'text-right' : 'text-left',
+                          key ? 'cursor-pointer select-none hover:text-gray-700' : '',
+                        ].join(' ')}
                         style={{ fontFamily: 'var(--font-geist-mono)' }}
+                        onClick={() => key && toggleAvailableSort(key)}
                       >
                         {label}
+                        {key && <SortIcon col={key} sortCol={availableSortCol} sortDir={availableSortDir} />}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y" style={{ borderColor: 'var(--nwd-border)' }}>
-                  {availableProjects.map((project) => {
+                  {sortedAvailableProjects.map((project) => {
                     const status = requestMap[project.id]
                     const isExpanded = expandedId === project.id
                     const isRequesting = requesting === project.id
@@ -355,6 +464,11 @@ function ContractorContent() {
                           <td className="px-4 py-3 whitespace-nowrap">
                             <RequestStatusBadge status={status ?? 'available'} />
                           </td>
+                          <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap" style={{ fontFamily: 'var(--font-geist-mono)' }}>
+                            {project.created_at
+                              ? new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                              : '—'}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
                               {status ? (
@@ -383,7 +497,7 @@ function ContractorContent() {
                         {isExpanded && (
                           <tr style={{ background: 'color-mix(in srgb, var(--nwd-teal) 5%, white)', borderTop: 'none' }}>
                             <td
-                              colSpan={4}
+                              colSpan={5}
                               className="px-6 py-4"
                               style={{ borderTop: '1px dashed color-mix(in srgb, var(--nwd-teal) 30%, transparent)' }}
                             >

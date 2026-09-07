@@ -135,7 +135,15 @@ Log in as admin, navigate to the user creation page, and create a test user. Ver
 - The invited user receives an onboarding email from Resend
 - The invited user can log in with the temporary password and is forced to change it
 
-If the email does not arrive, check that `RESEND_API_KEY` and `NEXT_PUBLIC_APP_URL` are correctly set in `.env.local`.
+If the email does not arrive, check that `RESEND_API_KEY` and `NEXT_PUBLIC_APP_URL` are correctly set in `.env.local`. (This is a separate delivery path from Supabase's own auth emails — confirmation, magic link, password reset — which are also now routed through Resend as of 2026-07, but via Supabase's custom SMTP setting rather than this env var; see `docs/architecture.md` → "Production configuration dependency" if you're debugging one of those instead.)
+
+### 5.4 Verify OAuth sign-in and account linking (optional)
+
+The shared test accounts (`admin@email.com`, `client@email.com`, `contractor@email.com`) **cannot** be used to test Google/GitHub/LinkedIn sign-in or linking — they're fabricated addresses with no real account behind them, so no OAuth provider will ever authenticate as one of them. To verify this flow, use your own real account instead:
+- Sign in with your own Google/GitHub/LinkedIn account from `/login`, or
+- Log in as any test user, then link your own account from `/settings`
+
+See `docs/architecture.md` → "OAuth Sign-In & Account Linking" for how the flow works under the hood.
 
 ---
 
@@ -192,4 +200,4 @@ Once your setup is verified, read these documents before writing any code:
 
 ---
 
-*Last updated: [Update on commit]*
+*Last updated: 2026-07-23*

@@ -345,7 +345,22 @@ See `docs/onboarding.md` for the full setup walkthrough including Supabase acces
 
 ---
 
-## 10. Notes for Contributors
+## 10. Running SQL Directly (`npm run db:exec`)
+
+For applying migrations or ad hoc queries against the actual database without going through the Supabase SQL editor by hand. Uses `scripts/run-sql.mjs` (plain `pg` client, not the Supabase CLI — this project has no `supabase/` migrations directory; migration SQL still lives inline in `docs/database-schema.md` as before).
+
+Requires `DATABASE_URL` in `.env.local` (Dashboard → Project Settings → Database → Connection string → URI). See `.env.example`. Never commit the real value.
+
+```bash
+npm run db:exec -- path/to/file.sql
+npm run db:exec -- --query "select proname from pg_proc where proname = 'approve_contractor_request'"
+```
+
+This runs with a real Postgres connection, not the anon/service-role REST clients — it bypasses RLS and PostgREST entirely, same trust level as the Supabase SQL editor. Treat it accordingly.
+
+---
+
+## 11. Notes for Contributors
 
 - Never disable RLS to fix a query bug. Adjust the policy or move the query to a server action using `supabaseAdmin`.
 - When adding a protected route, update both `proxy.ts` (`ROLE_ROUTES` or `AUTHENTICATED_PREFIXES`) and wrap the page with `RouteGuard`. One layer without the other is incomplete.

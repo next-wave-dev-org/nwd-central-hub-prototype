@@ -16,7 +16,7 @@ const ROLE_ROUTES: { prefix: string; role: UserRole }[] = [
 const AUTHENTICATED_PREFIXES = [''] // leaving blank for future iterations
 
 // Routes that anyone (including unauthenticated users) can access
-const PUBLIC_ROUTES = new Set(['/', '/login', '/unauthorized', '/test-supabase'])
+const PUBLIC_ROUTES = new Set(['/', '/login', '/unauthorized', '/test-supabase', '/auth/callback'])
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

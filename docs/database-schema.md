@@ -1220,6 +1220,53 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 
 ---
 
+## RPC Functions
+
+### `approve_contractor_request(p_request_id uuid)`
+
+Added to fix #93 — `approveRequest()` in `app/login/admin/requests/page.tsx` previously did two sequential client-side writes (update `proposal_requests.status` to `approved`, then insert into `contractor_projects`) with no transaction. If the insert failed after the update succeeded, the request was stuck "approved" with no matching `contractor_projects` row and the contractor never got access. This function combines both writes into a single Postgres function call, which runs as one transaction — either both writes commit or neither does.
+
+`SECURITY DEFINER` (mirroring `get_my_role()` and the helpers documented under "Two Creation Paths" above) so it can write to both tables regardless of which RLS policies are in place; the role check is done explicitly in the function body instead.
+
+**Migration (apply by hand in the Supabase SQL editor):**
+
+```sql
+CREATE OR REPLACE FUNCTION public.approve_contractor_request(p_request_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_contractor_id uuid;
+  v_project_id uuid;
+BEGIN
+  IF public.get_my_role() IS DISTINCT FROM 'admin' THEN
+    RAISE EXCEPTION 'Only admins can approve requests';
+  END IF;
+
+  UPDATE public.proposal_requests
+  SET status = 'approved'
+  WHERE id = p_request_id AND status = 'pending'
+  RETURNING contractor_id, project_id INTO v_contractor_id, v_project_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Request not found or already actioned';
+  END IF;
+
+  INSERT INTO public.contractor_projects (contractor_id, project_id)
+  VALUES (v_contractor_id, v_project_id)
+  ON CONFLICT (contractor_id, project_id) DO NOTHING;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.approve_contractor_request(uuid) TO authenticated;
+```
+
+Called from the client via `supabase.rpc('approve_contractor_request', { p_request_id })`. Any failure (not-pending request, non-admin caller) comes back as a normal PostgREST error and is surfaced through the existing error banner on the requests page — nothing swallowed.
+
+---
+
 ## Known Gaps
 
 | Gap | Impact | Resolved by |
