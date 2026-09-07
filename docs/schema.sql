@@ -56,3 +56,14 @@ CREATE TABLE public.proposal_requests (
   CONSTRAINT proposal_requests_contractor_id_fkey FOREIGN KEY (contractor_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
   CONSTRAINT proposal_requests_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE
 );
+
+CREATE TABLE public.project_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  project_id uuid NOT NULL,
+  sender_id uuid NOT NULL,
+  content text NOT NULL CHECK (char_length(content) <= 5000),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT project_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT project_messages_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE,
+  CONSTRAINT project_messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.profiles(id)
+);

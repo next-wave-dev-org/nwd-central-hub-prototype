@@ -118,14 +118,14 @@ assigned_at     timestamptz
 
 ### `project_messages`
 
-In-project messaging (#56), re-implemented fresh on this branch (see `docs/database-schema.md` for why this wasn't a git merge of the original unmerged branch). One thread per project; RLS via `is_project_client()`/`is_project_contractor()`/`get_my_role()`. Posting notifies every other project member through `notifications` (below).
+In-project messaging (#56). One thread per project, shared by the client, assigned contractor(s), and admin. RLS policies mirror the `is_project_client`/`is_project_contractor`/`get_my_role()` pattern below. Posting also notifies every other project member through `notifications` (below), added by #57. See `docs/database-schema.md` for the full migration and RLS table.
 
 ```sql
 id          uuid        PRIMARY KEY DEFAULT gen_random_uuid()
 project_id  uuid        NOT NULL REFERENCES projects(id) ON DELETE CASCADE
 sender_id   uuid        NOT NULL REFERENCES profiles(id)
 content     text        NOT NULL
-created_at  timestamptz NOT NULL DEFAULT now()
+created_at  timestamptz DEFAULT now()
 ```
 
 ### `direct_messages`
@@ -320,6 +320,7 @@ profiles!client_id ( name, email )
 - Admin rejects a proposal -- status set to `rejected`, removed from review queue
 - Contractors browse available projects and request to join; admin approves/rejects via `/login/admin/requests`, which inserts the `contractor_projects` row
 - Client, contractor, and admin each have an Active Projects list, and every project links to a shared workspace page at `/login/projects/[id]`
+- Client, contractor, and admin can each post and read messages in that project's shared thread (#56)
 
 For anything not listed here, `docs/roadmap.md` is the current source of truth -- this list is a snapshot, not maintained line-by-line on every PR.
 
@@ -365,9 +366,9 @@ This runs with a real Postgres connection, not the anon/service-role REST client
 - Never disable RLS to fix a query bug. Adjust the policy or move the query to a server action using `supabaseAdmin`.
 - When adding a protected route, update both `proxy.ts` (`ROLE_ROUTES` or `AUTHENTICATED_PREFIXES`) and wrap the page with `RouteGuard`. One layer without the other is incomplete.
 - The `is_temporary_password` flag drives the forced password change flow. Any action that creates or resets a password must set this flag correctly in `profiles`.
-- `contractor_projects` and `proposal_requests` have RLS enabled with policies applied. All new tables should follow the same pattern -- RLS on at creation, policies applied in the same migration, never left with zero policies.
-- #55 has landed (workspace page, `github_project_url`). #56 (project thread messaging) is still pending and will likely add a `project_messages` table (see schema above) -- coordinate before hard-depending on the current `projects`/messaging schema.
+- `contractor_projects`, `proposal_requests`, and `project_messages` have RLS enabled with policies applied. All new tables should follow the same pattern -- RLS on at creation, policies applied in the same migration, never left with zero policies.
+- #55 (workspace page, `github_project_url`) and #56 (project thread messaging, `project_messages`) have both landed.
 
 ---
 
-*Last updated: 2026-07-17*
+*Last updated: 2026-08-05*
