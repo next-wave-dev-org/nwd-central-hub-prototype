@@ -29,17 +29,23 @@ Read this alongside `docs/architecture.md`, which covers how these tables are qu
 Stores application users. Every row corresponds to a row in `auth.users` and is created atomically alongside it by the `createUser` server action in `actions.ts`.
 
 ```sql
-id                    uuid         PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
-email                 text
-name                  text
-role                  text         CHECK (role IN ('admin', 'client', 'contractor'))
-is_temporary_password boolean
-created_at            timestamp    DEFAULT now()
+id                     uuid         PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+email                  text
+name                   text
+role                   text         CHECK (role IN ('admin', 'client', 'contractor'))
+is_temporary_password  boolean
+created_at             timestamp    DEFAULT now()
+email_notifications    boolean      NOT NULL DEFAULT true   -- see "Email Notifications Migration" below
+pronouns               text                                 -- #98, see "Profile Personal Info Fields Migration" below
+company                text                                 -- #98
+region                 text                                 -- #98
+mini_profile_visibility jsonb       NOT NULL DEFAULT '{"pronouns":true,"company":true,"region":true}'  -- #98
 ```
 
 **Notes:**
 - `id` is the Supabase auth UID — not generated independently. The `profiles` row is deleted automatically if the corresponding `auth.users` row is deleted.
-- `role` is assigned by an admin at creation and is not user-editable.
+- `role` is assigned by an admin at creation and is not user-editable **in the UI** (the Profile page shows it read-only). Note the `Users can update own profile` RLS policy has no `WITH CHECK`, so it does not technically prevent a user from writing their own `role` via a raw query — pre-existing, tracked separately.
+- `pronouns` / `company` / `region` are free-text, user-editable on the Profile page, all nullable. `mini_profile_visibility` is a per-user map of which of those three show on the (not-yet-built) mini profile card — stored now, no consumer yet (#98).
 - `is_temporary_password` is set to `true` on creation and to `false` after the user completes the forced password change flow. `RouteGuard` reads this field on every protected page load.
 - `name` is set at creation but is not currently reflected in the `UserProfile` TypeScript type. Add `name?: string` to `types/auth.ts` before implementing workspace or messaging features that display user names.
 - NULL rows in this table indicate orphaned auth records — users created outside the `createUser` action. These are inert but should be cleaned up via a future migration.
@@ -1194,6 +1200,28 @@ WITH CHECK (id = auth.uid());
 - Checked by `email_notifications != false` (not `= true`) wherever emails are sent, so existing rows (which get `DEFAULT true` on the ALTER) and any future NULL are treated as opted-in.
 - Email sending happens from server actions (`lib/email/notificationActions.ts`), called right after the client-side insert succeeds in `SendMessageModal`, the notifications page's reply flow, and the announcements composer — not from a DB trigger, since Postgres can't call the Resend API directly and this app has no webhook/edge-function bridge configured. This makes email best-effort: if the browser tab closes or the network drops between the DB write succeeding and the follow-up server action call, the in-app notification still exists (source of truth) but the email won't send. Acceptable for a supplementary channel; revisit with a DB webhook if that gap matters later.
 - The client passes only the id of the row it just inserted (`direct_messages.id` / `announcements.id`), never recipients or content directly — the action re-authenticates the caller (`lib/supabase-server.ts`'s cookie-bound client + `auth.getUser()`), re-fetches the row under RLS, and confirms `sender_id` matches before deriving who to email and what to send. This closes off using these actions as an open mail relay (arbitrary recipients/content from an authenticated-but-unrelated caller). `heading`/`body` are HTML-escaped in `sendNotificationEmail.ts` before interpolation, since they're user-submitted DM/announcement text.
+
+---
+
+## Profile Personal Info Fields Migration (#98, apply by hand)
+
+Adds free-text personal fields to `profiles` plus a JSON map of which of them appear on the user's mini profile card. The card itself is not built yet (its natural home is the messaging/notifications surfaces from #56/#57), so `mini_profile_visibility` is written now and read later — there is no consumer today.
+
+```sql
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS pronouns text,
+  ADD COLUMN IF NOT EXISTS company  text,
+  ADD COLUMN IF NOT EXISTS region   text,
+  ADD COLUMN IF NOT EXISTS mini_profile_visibility jsonb NOT NULL
+    DEFAULT '{"pronouns": true, "company": true, "region": true}'::jsonb;
+```
+
+**Notes:**
+- **No grant or RLS change.** `profiles` already carries a table-level `GRANT UPDATE ... TO authenticated` (which automatically extends to new columns) and the `Users can update own profile` policy (`USING (auth.uid() = id)`) covers every column of the caller's own row. The Profile page writes these fields with the browser (anon) client, same as it already does for `name`.
+- All three text columns are nullable; the Profile page trims blank input back to `NULL`.
+- `mini_profile_visibility` is a whole-object write (the page sends the full `{pronouns, company, region}` map on every toggle), so no partial-JSON merge logic is needed. `jsonb` rather than three `boolean` columns because nothing queries or filters on it and #99 is expected to add more fields.
+- Profile-page saves call a new `refreshProfile()` on `AuthProvider`'s context afterward — a plain `profiles` UPDATE fires no auth event, so the cached `useAuth().profile` would otherwise stay stale until the next mount or tab refocus. (Same class of staleness as the change-password reroute bug in `bug-list.md`; not fixed there by this change.)
+- Avatar upload (the remaining task on #98) is a separate follow-up — it needs a Storage bucket and `storage.objects` policies and is not part of this migration.
 
 ---
 

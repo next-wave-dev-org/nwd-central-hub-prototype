@@ -49,13 +49,20 @@ The deployed schema, updated through PR #79 (Core Project Workspace). `docs/data
 Extends `auth.users`. Created atomically by the `createUser` server action.
 
 ```sql
-id                    uuid         PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
-email                 text
-name                  text
-role                  text         CHECK (role IN ('admin', 'client', 'contractor'))
-is_temporary_password boolean
-created_at            timestamp    DEFAULT now()
+id                      uuid         PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+email                   text
+name                    text
+role                    text         CHECK (role IN ('admin', 'client', 'contractor'))
+is_temporary_password   boolean
+created_at              timestamp    DEFAULT now()
+email_notifications     boolean      NOT NULL DEFAULT true
+pronouns                text                                          -- #98
+company                 text                                          -- #98
+region                  text                                          -- #98
+mini_profile_visibility jsonb        NOT NULL DEFAULT '{...}'::jsonb   -- #98, which fields show on the (unbuilt) mini profile card
 ```
+
+Additive columns (`email_notifications`, and the `#98` block) each have a dedicated "… Migration" section in `docs/database-schema.md`. None need a grant/RLS change — `profiles` has a table-level `UPDATE` grant to `authenticated` and the `Users can update own profile` policy covers all columns of the own row.
 
 ### `proposals`
 
