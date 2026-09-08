@@ -33,6 +33,7 @@ MVP is achieved when the **8-step acceptance test** in `docs/mvp.md` passes end-
 | #55 | Core Project Workspace Page (+ GitHub Project link) | ✅ Done (PR #79) |
 | #45 | Admin Dashboard: User Management Table | ✅ Done (PR #66) |
 | #40 | Contractor Workflow: Request & Join Proposals | ✅ Done (PR #63) |
+| #56 | Shared Project Thread Messaging | ✅ Done |
 
 ---
 
@@ -48,9 +49,7 @@ These are required for the 8-step acceptance test to pass. None are optional.
 
 ### Not Started (MVP Blockers)
 
-| Issue | Title | Status |
-|-------|-------|--------|
-| #56 | Shared Project Thread Messaging | 📋 Not Started |
+None currently.
 
 ---
 

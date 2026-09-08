@@ -17,7 +17,7 @@ Read this alongside `docs/architecture.md`, which covers how these tables are qu
 | `projects` | ✅ Complete (as of PR #54) | Approved proposals promoted to projects |
 | `contractor_projects` | ✅ Complete | Join table linking contractors to projects |
 | `proposal_requests` | ❌ Not built | Contractor request-to-join flow — pending #40 |
-| `project_messages` | ❌ Not built | In-project messaging — pending #56 |
+| `project_messages` | ✅ Complete | In-project messaging tied to a project (#56) |
 
 ---
 
@@ -230,18 +230,132 @@ created_at      timestamptz DEFAULT now()
 
 ---
 
-## Table: `project_messages` ❌ Not Built
+## Table: `project_messages`
 
-Required for in-project messaging (#56). Does not exist yet.
+In-project messaging (#56). One thread per project, shared by the client, assigned contractor(s), and admin.
 
-**Planned schema:**
+**Overlap with PR #119:** #119 (the notifications/direct-messaging system, #57) independently re-implemented this same table plus a rewrite of `app/login/projects/[id]/page.tsx`, to attach a `notify_project_message_recipients` trigger. The two never merged in either direction, so they'll conflict — decided to land this branch (#118) first, since it already carries the reviewed workspace UI (Client card, markdown descriptions, layout, unassigned-contractor composer hide) that #119 doesn't have. When #119 is picked back up: drop its `CREATE TABLE public.project_messages` and its `app/login/projects/[id]/page.tsx` messaging changes (table and page will already exist from this branch), keep everything else (`notifications`, `announcements`, `direct_messages`), and re-point its `notify_project_message_recipients` trigger at the table created here — the trigger function itself only touches `project_id`/`sender_id`/`content`, so it needs no changes. Also drop #119's own `project_messages_content_length` CHECK — added here instead (below) so it exists regardless of merge order.
 
 ```sql
-id          uuid       PRIMARY KEY DEFAULT gen_random_uuid()
-project_id  uuid       NOT NULL REFERENCES projects(id)
-sender_id   uuid       NOT NULL REFERENCES profiles(id)
-content     text       NOT NULL
-created_at  timestamp  DEFAULT now()
+id          uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+project_id  uuid        NOT NULL REFERENCES projects(id) ON DELETE CASCADE
+sender_id   uuid        NOT NULL REFERENCES profiles(id)
+content     text        NOT NULL CHECK (char_length(content) <= 5000)
+created_at  timestamptz DEFAULT now()
+```
+
+**Notes:**
+- `sender_id` references `profiles.id`, not `auth.users.id` directly — matches `proposals.client_id`, `contractor_projects.contractor_id`, etc.
+- No `role` column. The sender's role is resolved by joining to `profiles.role` at read time, not captured at send time — if a user's role changes after posting, older messages reflect their *current* role, not the role they held when they sent the message. Decided this way because it matches the drafted schema exactly and role changes are rare; revisit if that assumption stops holding.
+- No UPDATE/DELETE policies — messages are immutable (post + read only).
+- Delivery to other participants is via polling refetch from the client (`app/login/projects/[id]/page.tsx`), not Supabase Realtime — this is the first messaging feature in the app, and polling avoids introducing subscription/connection-cleanup machinery for MVP.
+- `content` is capped at 5000 characters (matches the limit #119 uses for `direct_messages`/`announcements` bodies, kept in sync here since either PR could land first) and enforced client-side too (`MESSAGE_MAX_LENGTH` in `app/login/projects/[id]/page.tsx`).
+
+**Correction:** the first version of this migration omitted the table-level `GRANT`, and inserting failed with `permission denied for table project_messages` even though the INSERT policy was correct — RLS only applies after the base table-level privilege check passes. Every other table in this project was originally created through the Supabase dashboard, which auto-grants `authenticated`/`anon`/`service_role` on creation; this table was the first created via raw SQL (`db:exec`/SQL editor), which does not. Fixed by adding an explicit `GRANT` (included below). Any future table created the same way needs the same explicit grant.
+
+**Migration (apply by hand — see `docs/DEVELOPER.md` §10):**
+
+```sql
+CREATE TABLE public.project_messages (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id  uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  sender_id   uuid NOT NULL REFERENCES public.profiles(id),
+  content     text NOT NULL CHECK (char_length(content) <= 5000),
+  created_at  timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.project_messages ENABLE ROW LEVEL SECURITY;
+
+-- Base table-level privilege — RLS policies alone are not enough. Needed
+-- because this table was created via raw SQL rather than the dashboard,
+-- which is what normally auto-grants this.
+GRANT SELECT, INSERT ON public.project_messages TO authenticated;
+
+-- Mirrors is_project_client(p_project_id) for the contractor side.
+CREATE OR REPLACE FUNCTION public.is_project_contractor(p_project_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.contractor_projects
+    WHERE project_id = p_project_id AND contractor_id = auth.uid()
+  );
+$$;
+
+-- Client (is_project_client), contractor (is_project_contractor), admin
+-- (get_my_role()) — the three membership mechanisms, each via its own
+-- SECURITY DEFINER helper, no raw subqueries.
+CREATE POLICY "Project members can view messages"
+ON public.project_messages FOR SELECT TO authenticated
+USING (
+  public.is_project_client(project_id)
+  OR public.is_project_contractor(project_id)
+  OR public.get_my_role() = 'admin'
+);
+
+CREATE POLICY "Project members can post messages"
+ON public.project_messages FOR INSERT TO authenticated
+WITH CHECK (
+  sender_id = auth.uid()
+  AND (
+    public.is_project_client(project_id)
+    OR public.is_project_contractor(project_id)
+    OR public.get_my_role() = 'admin'
+  )
+);
+
+-- Mirrors is_contractor_on_my_project(p_contractor_id), roles swapped —
+-- lets a contractor see their project's client (Client card + message
+-- attribution).
+CREATE OR REPLACE FUNCTION public.is_my_project_client(p_client_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.projects p
+    JOIN public.contractor_projects cp ON cp.project_id = p.id
+    WHERE cp.contractor_id = auth.uid() AND p.client_id = p_client_id
+  );
+$$;
+
+CREATE POLICY "Contractors can view client profiles on their assigned projects"
+ON public.profiles FOR SELECT TO authenticated
+USING (public.is_my_project_client(id));
+
+-- Lets any authenticated user see admin profiles (name/role), so an admin's
+-- messages render correctly for client and contractor viewers. No helper
+-- needed — same-row column check, no cross-table subquery, no recursion risk.
+CREATE POLICY "Authenticated users can view admin profiles"
+ON public.profiles FOR SELECT TO authenticated
+USING (role = 'admin');
+
+-- Found via #56 testing: a second contractor on the same project showed as
+-- "Unknown" in both the message thread and the Assigned Contractors panel —
+-- no prior policy let one contractor read another's profile, only
+-- client<->contractor and admin<->all were covered. Mirrors the same
+-- SECURITY DEFINER pattern, keyed off shared contractor_projects membership.
+CREATE OR REPLACE FUNCTION public.is_co_contractor(p_profile_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.contractor_projects cp1
+    JOIN public.contractor_projects cp2 ON cp2.project_id = cp1.project_id
+    WHERE cp1.contractor_id = auth.uid() AND cp2.contractor_id = p_profile_id
+  );
+$$;
+
+CREATE POLICY "Contractors can view co-contractor profiles on shared projects"
+ON public.profiles FOR SELECT TO authenticated
+USING (public.is_co_contractor(id));
 ```
 
 ---
@@ -257,7 +371,7 @@ auth.users
             │       │
             │       └── projects (proposal_id → proposals.id)
             │               │
-            │               ├── project_messages (project_id → projects.id)  [not built]
+            │               ├── project_messages (project_id → projects.id)
             │               ├── proposal_requests (project_id → projects.id)  [not built]
             │               └── contractor_projects (project_id → projects.id)
             │
@@ -265,7 +379,7 @@ auth.users
             │
             ├── proposal_requests (contractor_id → profiles.id)  [not built]
             │
-            └── project_messages (sender_id → profiles.id)  [not built]
+            └── project_messages (sender_id → profiles.id)
 ```
 
 ---
@@ -283,6 +397,9 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 | SELECT | Authenticated user | Own row only (`auth.uid() = id`) |
 | SELECT | Admin | All rows |
 | SELECT | Client | Profiles of contractors assigned to their own projects — two policies: an undocumented pre-existing one (scoped through `proposal_requests` approval, per Path A) plus an additive one using `public.is_contractor_on_my_project()`, added to also cover admin-initiated projects (see "Two Creation Paths" under `projects` above) |
+| SELECT | Contractor | Profile of the client on their assigned project(s), via `public.is_my_project_client()` (#56) |
+| SELECT | Contractor | Profiles of co-contractors on shared projects, via `public.is_co_contractor()` (#56) |
+| SELECT | Any authenticated user | Profiles with `role = 'admin'` (#56 — needed so admin senders are identified in the project message thread) |
 | INSERT | Server action only | Via `supabaseAdmin` in `createUser` — not client-initiated |
 | UPDATE | Authenticated user | Own row only |
 | UPDATE | Admin | Any row |
@@ -311,6 +428,16 @@ RLS is enabled on all tables. The browser Supabase client (`lib/supabase.ts`, an
 ### `proposal_requests` (not yet built)
 
 Policies will be defined when the table is created in #40. Planned: admin full access, contractor insert own, contractor view own.
+
+### `project_messages`
+
+| Operation | Who | Policy |
+|---|---|---|
+| SELECT | Client | Own project only, via `public.is_project_client(project_id)` |
+| SELECT | Contractor | Assigned project only, via `public.is_project_contractor(project_id)` |
+| SELECT | Admin | All rows, via `public.get_my_role() = 'admin'` |
+| INSERT | Client / Contractor / Admin | Same membership check as SELECT, plus `sender_id = auth.uid()` — cannot post as another user |
+| UPDATE / DELETE | Nobody | No policies — messages are immutable |
 
 ### `contractor_projects`
 
@@ -374,13 +501,11 @@ Called from the client via `supabase.rpc('approve_contractor_request', { p_reque
 
 | Gap | Impact | Resolved by |
 |---|---|---|
-| `UserProfile` type missing `name` | TypeScript friction when workspace/messaging display user names | Add `name?: string` to `types/auth.ts` before #55/#56 |
 | `proposal_requests` table not built | Contractor self-service join flow blocked | #40 |
-| `project_messages` table not built | In-project messaging blocked | #56 |
 | NULL rows in `profiles` | Orphaned auth records from out-of-flow user creation | Future cleanup migration (non-blocking) |
 | `budget` has no numeric constraint | Freeform text — no validation beyond form `type="number"` | Post-MVP hardening |
 | Terminal status not enforced at DB level | `approved`/`rejected` proposals can be updated via direct SQL | Post-MVP hardening (CHECK constraint or trigger) |
 
 ---
 
-*Last updated: [Update on commit]*
+*Last updated: 2026-08-05*

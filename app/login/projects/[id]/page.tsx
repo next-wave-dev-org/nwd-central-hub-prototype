@@ -1,14 +1,202 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'next/navigation'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
+
+const MESSAGE_POLL_INTERVAL_MS = 8000
+// Matches the project_messages.content CHECK constraint (docs/database-schema.md)
+// and the limit PR #119 uses for direct_messages/announcements bodies.
+const MESSAGE_MAX_LENGTH = 5000
+
+// Minimal, dependency-free formatter for project descriptions: paragraphs
+// (blank-line separated, single newlines kept as line breaks), #/##/###
+// headings, - / * bullet lists, 1. numbered lists, and **bold**/*italic*/
+// [link](url) inline spans. Not a full CommonMark implementation — covers
+// the subset real descriptions use without pulling in a markdown parser.
+// Builds React nodes directly (never dangerouslySetInnerHTML), so text is
+// safe by construction — no HTML injection risk from submitted content.
+type DescriptionBlock =
+  | { type: 'heading'; level: 2 | 3; text: string }
+  | { type: 'ul'; items: string[] }
+  | { type: 'ol'; items: string[] }
+  | { type: 'p'; lines: string[] }
+
+function parseDescriptionBlocks(source: string): DescriptionBlock[] {
+  const lines = source.replace(/\r\n/g, '\n').split('\n')
+  const blocks: DescriptionBlock[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    if (line.trim() === '') {
+      i++
+      continue
+    }
+
+    const headingMatch = line.match(/^(#{1,3})\s+(.*)$/)
+    if (headingMatch) {
+      blocks.push({ type: 'heading', level: headingMatch[1].length >= 3 ? 3 : 2, text: headingMatch[2].trim() })
+      i++
+      continue
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^[-*]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^[-*]\s+/, ''))
+        i++
+      }
+      blocks.push({ type: 'ul', items })
+      continue
+    }
+
+    if (/^\d+\.\s+/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\.\s+/, ''))
+        i++
+      }
+      blocks.push({ type: 'ol', items })
+      continue
+    }
+
+    const pLines: string[] = []
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !/^(#{1,3})\s+/.test(lines[i]) &&
+      !/^[-*]\s+/.test(lines[i]) &&
+      !/^\d+\.\s+/.test(lines[i])
+    ) {
+      pLines.push(lines[i])
+      i++
+    }
+    blocks.push({ type: 'p', lines: pLines })
+  }
+
+  return blocks
+}
+
+const INLINE_REGEX = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*/g
+
+// Allowlist http(s)/mailto/relative links; rejects javascript: and other
+// script-executing schemes that a submitted description could smuggle in.
+function isSafeHref(href: string): boolean {
+  const trimmed = href.trim()
+  const schemeMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/)
+  if (!schemeMatch) return true
+  const scheme = schemeMatch[1].toLowerCase()
+  return scheme === 'http' || scheme === 'https' || scheme === 'mailto'
+}
+
+function renderInline(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = []
+  let lastIndex = 0
+  let key = 0
+  let match: RegExpExecArray | null
+
+  INLINE_REGEX.lastIndex = 0
+  while ((match = INLINE_REGEX.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index))
+
+    if (match[1] !== undefined) {
+      if (isSafeHref(match[2])) {
+        nodes.push(
+          <a
+            key={`${keyPrefix}-${key++}`}
+            href={match[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+            style={{ color: 'var(--nwd-purple)' }}
+          >
+            {match[1]}
+          </a>
+        )
+      } else {
+        nodes.push(match[1])
+      }
+    } else if (match[3] !== undefined) {
+      nodes.push(
+        <strong key={`${keyPrefix}-${key++}`} className="font-semibold text-gray-900">
+          {match[3]}
+        </strong>
+      )
+    } else if (match[4] !== undefined) {
+      nodes.push(<em key={`${keyPrefix}-${key++}`}>{match[4]}</em>)
+    }
+
+    lastIndex = INLINE_REGEX.lastIndex
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex))
+
+  return nodes
+}
+
+function DescriptionText({ text }: { text: string }) {
+  const blocks = parseDescriptionBlocks(text)
+
+  return (
+    <>
+      {blocks.map((block, bi) => {
+        if (block.type === 'heading') {
+          const className =
+            block.level === 2
+              ? 'text-sm font-semibold text-gray-900 mt-4 mb-2 first:mt-0'
+              : 'text-sm font-semibold text-gray-900 mt-3 mb-1 first:mt-0'
+          return block.level === 2 ? (
+            <h3 key={bi} className={className}>{renderInline(block.text, `h${bi}`)}</h3>
+          ) : (
+            <h4 key={bi} className={className}>{renderInline(block.text, `h${bi}`)}</h4>
+          )
+        }
+
+        if (block.type === 'ul') {
+          return (
+            <ul key={bi} className="list-disc list-inside mb-3 space-y-1 last:mb-0">
+              {block.items.map((item, ii) => (
+                <li key={ii}>{renderInline(item, `ul${bi}-${ii}`)}</li>
+              ))}
+            </ul>
+          )
+        }
+
+        if (block.type === 'ol') {
+          return (
+            <ol key={bi} className="list-decimal list-inside mb-3 space-y-1 last:mb-0">
+              {block.items.map((item, ii) => (
+                <li key={ii}>{renderInline(item, `ol${bi}-${ii}`)}</li>
+              ))}
+            </ol>
+          )
+        }
+
+        return (
+          <p key={bi} className="mb-3 last:mb-0">
+            {block.lines.flatMap((line, li) => {
+              const inline = renderInline(line, `p${bi}-${li}`)
+              return li === 0 ? inline : [<br key={`br-${bi}-${li}`} />, ...inline]
+            })}
+          </p>
+        )
+      })}
+    </>
+  )
+}
 
 type ContractorProject = {
   contractor_id: string
   profiles: { name: string | null; email: string | null } | null
+}
+
+type ClientProfile = {
+  name: string | null
+  email: string | null
 }
 
 type Project = {
@@ -20,13 +208,36 @@ type Project = {
   created_at: string
   github_project_url: string | null
   contractor_projects: ContractorProject[]
+  client: ClientProfile | null
+}
+
+type ProjectMessage = {
+  id: string
+  content: string
+  created_at: string
+  sender_id: string
+  profiles: { name: string | null; role: string | null } | null
+}
+
+function roleLabel(role: string | null | undefined): string {
+  if (!role) return ''
+  return role.charAt(0).toUpperCase() + role.slice(1)
 }
 
 function ProjectWorkspaceContent() {
   const { id } = useParams<{ id: string }>()
+  const { profile } = useAuth()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+
+  const [messages, setMessages] = useState<ProjectMessage[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const messageListRef = useRef<HTMLDivElement>(null)
+  const prevMessageCountRef = useRef(0)
+  const fetchSeqRef = useRef(0)
 
   useEffect(() => {
     if (!id) return
@@ -36,7 +247,8 @@ function ProjectWorkspaceContent() {
         .from('projects')
         .select(`
           id, title, description, budget, status, created_at, github_project_url,
-          contractor_projects(contractor_id, profiles(name, email))
+          contractor_projects(contractor_id, profiles(name, email)),
+          client:profiles!projects_client_id_fkey(name, email)
         `)
         .eq('id', id)
         .single()
@@ -51,6 +263,94 @@ function ProjectWorkspaceContent() {
 
     fetchProject()
   }, [id])
+
+  // Guarded by fetchSeqRef so an in-flight fetch that resolves out of order
+  // (e.g. a poll landing after sendMessage's refetch) can't clobber newer data.
+  const fetchMessages = useCallback(async () => {
+    if (!id) return
+    const seq = ++fetchSeqRef.current
+
+    const { data } = await supabase
+      .from('project_messages')
+      .select('id, content, created_at, sender_id, profiles!sender_id(name, role)')
+      .eq('project_id', id)
+      .order('created_at', { ascending: true })
+
+    if (seq === fetchSeqRef.current && data) {
+      setMessages(data as unknown as ProjectMessage[])
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (!id) return
+
+    fetchMessages()
+    const intervalId = setInterval(fetchMessages, MESSAGE_POLL_INTERVAL_MS)
+
+    return () => clearInterval(intervalId)
+  }, [id, fetchMessages])
+
+  useEffect(() => {
+    const el = messageListRef.current
+    const prevCount = prevMessageCountRef.current
+    prevMessageCountRef.current = messages.length
+
+    if (!el || messages.length === prevCount) return
+
+    const isInitialLoad = prevCount === 0
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+
+    if (isInitialLoad || isNearBottom) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [messages])
+
+  const isUnassignedContractor =
+    !!project &&
+    profile?.role === 'contractor' &&
+    !project.contractor_projects.some((cp) => cp.contractor_id === profile.id)
+
+  const sendMessage = async () => {
+    const content = newMessage.trim()
+    if (!content || !profile?.id || sending) return
+
+    if (content.length > MESSAGE_MAX_LENGTH) {
+      setSendError(`Message must be ${MESSAGE_MAX_LENGTH} characters or fewer.`)
+      return
+    }
+
+    setSending(true)
+    setSendError(null)
+
+    const { error } = await supabase.from('project_messages').insert({
+      project_id: id,
+      sender_id: profile.id,
+      content,
+    })
+
+    if (error) {
+      setSendError(error.message)
+      setSending(false)
+      return
+    }
+
+    setNewMessage('')
+    setSending(false)
+
+    await fetchMessages()
+  }
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault()
+    sendMessage()
+  }
+
+  const handleMessageInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'white' }}>
@@ -118,47 +418,147 @@ function ProjectWorkspaceContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</p>
-                  <p className="text-sm text-gray-900 leading-relaxed">{project.description || '—'}</p>
-                </div>
+              <div className="mb-5 bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Messages</p>
 
-                <div className="bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Budget</p>
-                  <p className="text-sm text-gray-900">{project.budget || '—'}</p>
-                </div>
-
-                <div className="bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Created</p>
-                  <p className="text-sm text-gray-900">
-                    {new Date(project.created_at).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Assigned Contractors
-                  </p>
-                  {project.contractor_projects.length === 0 ? (
-                    <p className="text-sm text-gray-400">No contractors assigned yet.</p>
+                <div ref={messageListRef} className="max-h-96 overflow-y-auto flex flex-col gap-4 mb-4 pr-1">
+                  {messages.length === 0 ? (
+                    <p className="text-sm text-gray-400">No messages yet.</p>
                   ) : (
-                    <ul className="flex flex-col gap-2">
-                      {project.contractor_projects.map((cp) => (
-                        <li key={cp.contractor_id} className="text-sm text-gray-900">
-                          <span className="font-medium">{cp.profiles?.name ?? 'Unknown'}</span>
-                          {cp.profiles?.email && (
-                            <span className="text-gray-400 ml-2">{cp.profiles.email}</span>
+                    messages.map((message) => (
+                      <div key={message.id} className="text-sm">
+                        <div className="flex items-baseline gap-2 mb-0.5">
+                          <span className="font-medium text-gray-900">
+                            {message.profiles?.name ?? 'Unknown'}
+                          </span>
+                          {message.profiles?.role && (
+                            <span
+                              className="text-xs font-semibold tracking-wider uppercase"
+                              style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}
+                            >
+                              {roleLabel(message.profiles.role)}
+                            </span>
                           )}
-                        </li>
-                      ))}
-                    </ul>
+                          <span className="text-xs text-gray-400">
+                            {new Date(message.created_at).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-gray-900 leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                      </div>
+                    ))
                   )}
                 </div>
+
+                {!isUnassignedContractor && (
+                  <>
+                    {sendError && (
+                      <div
+                        className="mb-3 rounded-lg p-3 border text-sm flex items-start justify-between gap-2"
+                        style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}
+                      >
+                        <span>{sendError}</span>
+                        <button onClick={() => setSendError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
+                      <textarea
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={handleMessageInputKeyDown}
+                        placeholder="Write a message"
+                        aria-label="Write a message"
+                        rows={3}
+                        maxLength={MESSAGE_MAX_LENGTH}
+                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 bg-white text-gray-900"
+                        style={{ borderColor: 'var(--nwd-border)', resize: 'vertical' }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={sending || !newMessage.trim()}
+                        className="self-end rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+                        style={{ background: 'var(--nwd-teal)' }}
+                      >
+                        {sending ? 'Sending…' : 'Send'}
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+
+              <div className="mb-5 bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Client</p>
+                    {project.client ? (
+                      <p className="text-sm text-gray-900">
+                        <span className="font-medium">{project.client.name ?? 'Unknown'}</span>
+                        {project.client.email && (
+                          <span className="text-gray-400 ml-2">{project.client.email}</span>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-400">No client assigned.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Assigned Contractors
+                    </p>
+                    {project.contractor_projects.length === 0 ? (
+                      <p className="text-sm text-gray-400">No contractors assigned yet.</p>
+                    ) : (
+                      <ul className="flex flex-col gap-2">
+                        {project.contractor_projects.map((cp) => (
+                          <li key={cp.contractor_id} className="text-sm text-gray-900">
+                            <span className="font-medium">{cp.profiles?.name ?? 'Unknown'}</span>
+                            {cp.profiles?.email && (
+                              <span className="text-gray-400 ml-2">{cp.profiles.email}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg border p-5" style={{ borderColor: 'var(--nwd-border)' }}>
+                <div
+                  className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5 pb-5 border-b"
+                  style={{ borderColor: 'var(--nwd-border)' }}
+                >
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Budget</p>
+                    <p className="text-sm text-gray-900">{project.budget || '—'}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Created</p>
+                    <p className="text-sm text-gray-900">
+                      {new Date(project.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</p>
+                {project.description ? (
+                  <div className="text-sm text-gray-900 leading-relaxed">
+                    <DescriptionText text={project.description} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-900">—</p>
+                )}
               </div>
             </>
           )}
