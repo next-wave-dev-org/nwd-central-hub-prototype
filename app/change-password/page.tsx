@@ -121,7 +121,7 @@ export default function ChangePasswordPage() {
 
             <button
               type="submit"
-              className="w-full rounded bg-black text-white p-2"
+              className="w-full rounded bg-black text-white p-2 cursor-pointer"
             >
               Update Password
             </button>

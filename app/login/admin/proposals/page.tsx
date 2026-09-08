@@ -196,7 +196,7 @@ function ProposalReviewContent() {
                             <div className="mb-6 rounded-lg p-4 border" style={{ background: 'color-mix(in srgb, #10b981 8%, white)', borderColor: '#6ee7b7' }}>
                                 <div className="flex items-center justify-between gap-2">
                                     <p className="text-sm font-semibold text-emerald-800">{toast}</p>
-                                    <button onClick={() => setToast(null)} className="text-emerald-600 hover:text-emerald-800 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                                    <button onClick={() => setToast(null)} className="text-emerald-600 hover:text-emerald-800 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
                                 </div>
                             </div>
                         )}
@@ -204,7 +204,7 @@ function ProposalReviewContent() {
                         {error && (
                             <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
                                 <span>{error}</span>
-                                <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                                <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
                             </div>
                         )}
 
@@ -283,7 +283,7 @@ function ProposalReviewContent() {
                                                                 type="button"
                                                                 disabled={!isReviewable || anyProcessing}
                                                                 onClick={() => handleApprove(proposal.id)}
-                                                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                                                 style={{
                                                                     borderColor: 'var(--nwd-teal)',
                                                                     color: isProcessing ? '#6b7280' : 'var(--nwd-teal)',
@@ -298,7 +298,7 @@ function ProposalReviewContent() {
                                                                 type="button"
                                                                 disabled={!isReviewable || anyProcessing}
                                                                 onClick={() => handleReject(proposal.id)}
-                                                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                                                 style={{
                                                                     borderColor: '#f43f5e',
                                                                     color: isProcessing ? '#6b7280' : '#f43f5e',
