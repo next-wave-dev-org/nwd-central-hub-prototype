@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
@@ -24,6 +24,35 @@ const ROLE_LABELS: Record<string, string> = {
 const inputClass =
   'mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900'
 
+const AVATAR_BUCKET = 'avatars'
+const AVATAR_PUBLIC_PREFIX = `/storage/v1/object/public/${AVATAR_BUCKET}/`
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024
+// Kept in sync with the bucket's allowed_mime_types (see the Profile Avatar
+// Migration in docs/database-schema.md) — this check is UX only, the bucket
+// enforces both type and size server-side.
+const AVATAR_EXT_BY_TYPE: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+}
+const AVATAR_ACCEPT = Object.keys(AVATAR_EXT_BY_TYPE).join(',')
+
+// The stored avatar_url is a full public URL; recover the in-bucket object path
+// so the previous file can be deleted after a replace.
+function avatarStoragePath(url: string | null | undefined): string | null {
+  if (!url) return null
+  const i = url.indexOf(AVATAR_PUBLIC_PREFIX)
+  return i === -1 ? null : decodeURIComponent(url.slice(i + AVATAR_PUBLIC_PREFIX.length))
+}
+
+function initialsFrom(name: string | undefined, email: string | undefined): string {
+  const source = name?.trim() || email?.trim() || '?'
+  const parts = source.split(/\s+/).filter(Boolean)
+  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : source.slice(0, 2)
+  return letters.toUpperCase()
+}
+
 function ProfileContent() {
   const { profile, refreshProfile } = useAuth()
 
@@ -43,6 +72,11 @@ function ProfileContent() {
   const [pendingVisibility, setPendingVisibility] = useState<MiniProfileVisibility | null>(null)
   const visibility = pendingVisibility ?? savedVisibility
   const [visibilityError, setVisibilityError] = useState<string | null>(null)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
+  const avatarUrl = profile?.avatar_url ?? null
 
   const handleEdit = () => {
     setName(profile?.name ?? '')
@@ -134,6 +168,83 @@ function ProfileContent() {
     setPendingVisibility(null)
   }
 
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file after an error
+    if (!file || !profile) return
+
+    setAvatarError('')
+
+    const ext = AVATAR_EXT_BY_TYPE[file.type]
+    if (!ext) {
+      setAvatarError('Use a PNG, JPG, WebP, or GIF image.')
+      return
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError('Image must be 2 MB or smaller.')
+      return
+    }
+
+    setAvatarBusy(true)
+
+    const prevPath = avatarStoragePath(avatarUrl)
+    const newPath = `${profile.id}/${Date.now()}.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from(AVATAR_BUCKET)
+      .upload(newPath, file, { contentType: file.type })
+
+    if (uploadError) {
+      setAvatarError(uploadError.message)
+      setAvatarBusy(false)
+      return
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(newPath)
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', profile.id)
+
+    if (updateError) {
+      await supabase.storage.from(AVATAR_BUCKET).remove([newPath]) // don't orphan the upload
+      setAvatarError(updateError.message)
+      setAvatarBusy(false)
+      return
+    }
+
+    if (prevPath && prevPath !== newPath) {
+      await supabase.storage.from(AVATAR_BUCKET).remove([prevPath]) // best effort
+    }
+
+    await refreshProfile()
+    setAvatarBusy(false)
+  }
+
+  const handleAvatarRemove = async () => {
+    if (!profile || !avatarUrl) return
+    setAvatarError('')
+    setAvatarBusy(true)
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: null })
+      .eq('id', profile.id)
+
+    if (updateError) {
+      setAvatarError(updateError.message)
+      setAvatarBusy(false)
+      return
+    }
+
+    const path = avatarStoragePath(avatarUrl)
+    if (path) await supabase.storage.from(AVATAR_BUCKET).remove([path]) // best effort
+
+    await refreshProfile()
+    setAvatarBusy(false)
+  }
+
   const roleLabel = profile ? ROLE_LABELS[profile.role] ?? profile.role : ''
 
   return (
@@ -166,6 +277,64 @@ function ProfileContent() {
                   </button>
                 )}
               </div>
+
+              <div className="flex items-center gap-4 mb-6">
+                {avatarUrl ? (
+                  <span className="block w-20 h-20 rounded-full overflow-hidden border border-gray-200 flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 80px avatar from Supabase Storage; the image optimizer adds a proxy round-trip for no gain */}
+                    <img
+                      src={avatarUrl}
+                      alt="Profile photo"
+                      className="w-full h-full object-cover"
+                    />
+                  </span>
+                ) : (
+                  <div
+                    className="w-20 h-20 rounded-full flex items-center justify-center text-xl font-semibold text-white flex-shrink-0"
+                    style={{ background: 'var(--nwd-purple)' }}
+                  >
+                    {initialsFrom(profile?.name, profile?.email)}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={avatarBusy}
+                      className="text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ color: 'var(--nwd-teal)' }}
+                    >
+                      {avatarBusy ? 'Uploading…' : avatarUrl ? 'Change photo' : 'Upload photo'}
+                    </button>
+                    {avatarUrl && !avatarBusy && (
+                      <button
+                        type="button"
+                        onClick={handleAvatarRemove}
+                        className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400">PNG, JPG, WebP, or GIF. Max 2&nbsp;MB.</p>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={AVATAR_ACCEPT}
+                  onChange={handleAvatarSelect}
+                  className="hidden"
+                />
+              </div>
+
+              {avatarError && (
+                <div className="rounded-md bg-red-50 border border-red-200 p-4 text-sm text-red-700 mb-4">
+                  {avatarError}
+                </div>
+              )}
 
               {success && (
                 <div className="rounded-md bg-green-50 border border-green-200 p-4 text-sm text-green-800 mb-4">

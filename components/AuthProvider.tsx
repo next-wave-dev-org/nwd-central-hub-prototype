@@ -17,7 +17,7 @@ const AuthContext = createContext<AuthContextValue>({
 })
 
 const PROFILE_COLUMNS =
-  'id, role, name, is_temporary_password, email_notifications, pronouns, company, region, mini_profile_visibility'
+  'id, role, name, is_temporary_password, email_notifications, pronouns, company, region, mini_profile_visibility, avatar_url'
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
