@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
+import SendMessageModal from '@/components/SendMessageModal'
 import { useAuth } from '@/components/AuthProvider'
 import { createUser } from './create/actions'
 import { getUsers, resetUserPassword, deleteUser, updateUser } from './actions'
@@ -94,6 +96,7 @@ function ManageUsersContent() {
   const [resettingId, setResettingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null)
+  const [messagingUser, setMessagingUser] = useState<UserProfile | null>(null)
 
   // ── Table controls ──
   const [searchRaw, setSearchRaw] = useState('')
@@ -351,8 +354,19 @@ function ManageUsersContent() {
 
           {/* ── All Users ── */}
           <section>
-            <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}>ALL USERS</p>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Registered users</h2>
+            <div className="flex items-end justify-between mb-6">
+              <div>
+                <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: 'var(--nwd-teal)', fontFamily: 'var(--font-geist-mono)' }}>ALL USERS</p>
+                <h2 className="text-2xl font-bold text-gray-900">Registered users</h2>
+              </div>
+              <Link
+                href="/login/admin/announcements"
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: 'var(--nwd-teal)' }}
+              >
+                + New Announcement
+              </Link>
+            </div>
 
             {resetResult && (
               <div className="mb-6 rounded-lg p-4 border" style={{ background: 'color-mix(in srgb, #10b981 8%, white)', borderColor: '#6ee7b7' }}>
@@ -520,6 +534,16 @@ function ManageUsersContent() {
                                   <span className="text-xs text-gray-400 mr-1" style={{ fontFamily: 'var(--font-geist-mono)' }}>
                                     {user.name ?? user.email}
                                   </span>
+                                  {user.role !== 'admin' && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setMessagingUser(user) }}
+                                      disabled={anyBusy}
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                      style={{ borderColor: 'var(--nwd-teal)', color: 'var(--nwd-teal)', background: 'color-mix(in srgb, var(--nwd-teal) 8%, white)' }}
+                                    >
+                                      Message
+                                    </button>
+                                  )}
                                   {isPending && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleReset(user) }}
@@ -637,6 +661,18 @@ function ManageUsersContent() {
           NWD CENTRAL HUB
         </p>
       </footer>
+
+      {messagingUser && (messagingUser.role === 'client' || messagingUser.role === 'contractor') && (
+        <SendMessageModal
+          onClose={() => setMessagingUser(null)}
+          recipients={[{
+            id: messagingUser.id,
+            name: messagingUser.name ?? null,
+            email: messagingUser.email,
+            role: messagingUser.role,
+          }]}
+        />
+      )}
 
     </div>
   )

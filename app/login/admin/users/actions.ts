@@ -2,6 +2,7 @@
 
 import { generateTemporaryPassword } from '@/lib/password'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { createActionSupabaseClient } from '@/lib/supabase-server'
 import { sendWelcomeEmail } from '@/lib/email/sendWelcomeEmail'
 import type { UserProfile, UserRole } from '@/types/auth'
 
@@ -9,7 +10,17 @@ export type GetUsersResult =
   | { success: true; users: UserProfile[] }
   | { success: false; error: string }
 
+// Returns every user's profile (name/email/role) — callers (SelectUsersModal,
+// the admin users page, project creation) are UI-gated to admins, but that's
+// not enforcement, so check the caller's role here too.
 export async function getUsers(): Promise<GetUsersResult> {
+  const supabase = await createActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Not authenticated.' }
+
+  const { data: caller } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (caller?.role !== 'admin') return { success: false, error: 'Not authorized.' }
+
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, email, name, role, is_temporary_password, created_at')

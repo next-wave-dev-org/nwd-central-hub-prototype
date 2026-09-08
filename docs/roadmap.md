@@ -125,26 +125,27 @@ Work that begins after the 8-step acceptance test passes in production.
 
 | Item | Notes |
 |------|-------|
-| #57 Admin-to-User Direct Messaging | Private DMs from admin to individual contractor or client dashboards |
-| Email notifications for project events | Delivery via Resend (already wired); triggers listed below |
-| Real-time updates (Supabase Realtime) | Replace polling in the project thread; extend to dashboard activity feeds |
-| In-app notification inbox | Persistent bell/inbox for activity across all roles |
+| #57 Admin-to-User Direct Messaging + Notifications System | ✅ Done — expanded well beyond the original one-directional DM: titled DMs with flat reply threading, admin-authored role-targeted announcements (with read receipts), and automatic system notifications for the full proposal/request/project lifecycle (see taxonomy below). Everything lands in a single categorized (Direct Messages / Announcements / System) feed at `/notifications`, with a site-wide unread-count badge (`NotificationBell`) in the Navbar. Delivery is entirely trigger-driven at the database level (`SECURITY DEFINER` functions on `direct_messages`, `announcements`, `project_messages`, `proposals`, `proposal_requests`, `contractor_projects`, `projects`) — no application code had to be touched to wire up the system-event notifications. In-app only; email delivery (see taxonomy below) not yet implemented. |
+| Email notifications for project events | Delivery via Resend (already wired for onboarding email); would extend the trigger functions above rather than needing new instrumentation |
+| Real-time updates (Supabase Realtime) | Replace polling (8s, used everywhere in this app) in the project thread and notifications feed |
 
 **Notification event taxonomy:**
 
-| Event | Who receives it |
-|-------|----------------|
-| Proposal submitted | Admin |
-| Proposal approved | Client |
-| Proposal rejected | Client |
-| Contractor access request submitted | Admin |
-| Contractor access request approved | Contractor |
-| Contractor access request rejected | Contractor |
-| Contractor assigned to project | Client (so they know who's on it) |
-| New message in project thread | All 3 roles assigned to that project |
-| Admin DM received | Target contractor or client (dashboard + email) |
-| Project status changed (active → complete) | All members of that project |
-| New approved proposal available to request | All contractors (opt-in; can be noisy) |
+| Event | Who receives it | Status |
+|-------|----------------|--------|
+| Proposal submitted | Admin | ✅ Done |
+| Proposal approved | Client | ✅ Done |
+| Proposal rejected | Client | ✅ Done |
+| Contractor access request submitted | Admin | ✅ Done |
+| Contractor access request approved | Contractor (as "you joined") | ✅ Done |
+| Contractor access request rejected | Contractor | ✅ Done |
+| Contractor assigned/joined a project | The contractor, the client, and every other contractor already on that project | ✅ Done |
+| Client assigned to a project | Client | ✅ Done |
+| New message in project thread | Every other project member (client + contractors) | ✅ Done |
+| Admin DM received / replied to | Target contractor, client, or admin (dashboard; email still pending) | ✅ Done |
+| Announcement sent | Every profile matching the admin-chosen target role(s) | ✅ Done |
+| Project status changed (active → complete) | All members of that project | 📋 Not started — no project status-transition feature exists yet to hang this off |
+| New approved proposal available to request | All contractors (opt-in; can be noisy) | 📋 Not started |
 
 Delivery order: email first (Resend), in-app bell second.
 

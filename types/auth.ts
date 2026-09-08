@@ -6,5 +6,6 @@ export type UserProfile = {
   name?: string
   role: UserRole
   is_temporary_password?: boolean
+  email_notifications?: boolean
   created_at?: string
 }

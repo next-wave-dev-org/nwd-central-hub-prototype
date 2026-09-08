@@ -65,6 +65,13 @@ export default function UserMenu() {
             Profile
           </Link>
           <Link
+            href="/notifications"
+            className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            Notifications
+          </Link>
+          <Link
             href="/settings"
             className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             onClick={() => setOpen(false)}

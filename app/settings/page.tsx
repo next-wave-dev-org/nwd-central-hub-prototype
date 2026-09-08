@@ -5,6 +5,7 @@ import Image from 'next/image'
 import type { UserIdentity } from '@supabase/supabase-js'
 import RouteGuard from '@/components/RouteGuard'
 import Navbar from '@/components/Navbar'
+import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { GithubIcon } from '@/components/SocialIcons'
 
@@ -80,11 +81,22 @@ function ToggleSwitch({
 }
 
 function SettingsContent() {
+  const { profile } = useAuth()
 
   const [timezone, setTimezone] = useState(TIMEZONES[0])
-  const [emailNotifications, setEmailNotifications] = useState(true)
-  const [pushNotifications, setPushNotifications] = useState(false)
-  const [smsNotifications, setSmsNotifications] = useState(false)
+  const [emailNotifications, setEmailNotifications] = useState(profile?.email_notifications ?? true)
+  const [emailNotificationsError, setEmailNotificationsError] = useState<string | null>(null)
+
+  async function handleEmailNotificationsChange(value: boolean) {
+    setEmailNotifications(value)
+    setEmailNotificationsError(null)
+    if (!profile?.id) return
+    const { error } = await supabase.from('profiles').update({ email_notifications: value }).eq('id', profile.id)
+    if (error) {
+      setEmailNotifications(!value)
+      setEmailNotificationsError(error.message)
+    }
+  }
 
   const [identities, setIdentities] = useState<UserIdentity[]>([])
   const [identitiesLoading, setIdentitiesLoading] = useState(true)
@@ -195,24 +207,14 @@ function SettingsContent() {
               <div className="divide-y divide-gray-100">
                 <ToggleSwitch
                   label="Email notifications"
-                  description="Project and account updates via email"
+                  description="Direct messages and announcements via email"
                   checked={emailNotifications}
-                  onChange={setEmailNotifications}
-                />
-                <ToggleSwitch
-                  label="Push notifications"
-                  description="Alerts sent to your browser or device"
-                  checked={pushNotifications}
-                  onChange={setPushNotifications}
-                />
-                <ToggleSwitch
-                  label="SMS notifications"
-                  description="Text messages for urgent updates"
-                  checked={smsNotifications}
-                  onChange={setSmsNotifications}
+                  onChange={handleEmailNotificationsChange}
                 />
               </div>
-              <p className="text-xs text-gray-400 mt-2">Coming soon — notification preferences aren&apos;t saved yet.</p>
+              {emailNotificationsError && (
+                <p className="text-xs mt-2" style={{ color: '#9f1239' }}>{emailNotificationsError}</p>
+              )}
             </div>
 
             <div className="bg-white p-8 rounded-lg shadow-md">
