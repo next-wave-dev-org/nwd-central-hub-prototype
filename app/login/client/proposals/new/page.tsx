@@ -85,7 +85,7 @@ function NewProposalContent() {
                                 style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}
                             >
                                 <span>{error}</span>
-                                <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                                <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
                             </div>
                         )}
 
@@ -149,7 +149,7 @@ function NewProposalContent() {
                             <button
                                 type="submit"
                                 disabled={isSubmitting || overLimit}
-                                className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+                                className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                 style={{ background: 'var(--nwd-teal)' }}
                             >
                                 {isSubmitting ? 'Submitting…' : 'Submit Proposal'}

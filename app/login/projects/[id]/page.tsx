@@ -462,7 +462,7 @@ function ProjectWorkspaceContent() {
                         style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}
                       >
                         <span>{sendError}</span>
-                        <button onClick={() => setSendError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                        <button onClick={() => setSendError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
                       </div>
                     )}
 
@@ -481,7 +481,7 @@ function ProjectWorkspaceContent() {
                       <button
                         type="submit"
                         disabled={sending || !newMessage.trim()}
-                        className="self-end rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+                        className="self-end rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                         style={{ background: 'var(--nwd-teal)' }}
                       >
                         {sending ? 'Sending…' : 'Send'}

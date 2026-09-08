@@ -94,7 +94,7 @@ function ProfileContent() {
               {!editing && (
                 <button
                   onClick={handleEdit}
-                  className="text-sm font-medium transition-colors"
+                  className="text-sm font-medium transition-colors cursor-pointer"
                   style={{ color: 'var(--nwd-teal)' }}
                 >
                   Edit
@@ -140,7 +140,7 @@ function ProfileContent() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                    className="flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {saving ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -148,7 +148,7 @@ function ProfileContent() {
                     type="button"
                     onClick={handleCancel}
                     disabled={saving}
-                    className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                    className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors cursor-pointer disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>

@@ -341,7 +341,7 @@ function ManageUsersContent() {
               </div>
               <div className="flex flex-col justify-end">
                 <button type="submit" disabled={creating}
-                  className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+                  className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{ background: 'var(--nwd-teal)' }}>
                   {creating ? 'Creating...' : 'Create User'}
                 </button>
@@ -378,7 +378,7 @@ function ManageUsersContent() {
                       {resetResult.password}
                     </code>
                   </div>
-                  <button onClick={() => setResetResult(null)} className="text-emerald-600 hover:text-emerald-800 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                  <button onClick={() => setResetResult(null)} className="text-emerald-600 hover:text-emerald-800 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
                 </div>
               </div>
             )}
@@ -387,7 +387,7 @@ function ManageUsersContent() {
               <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2"
                 style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
                 <span>{resetError}</span>
-                <button onClick={() => setResetError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0" aria-label="Dismiss">×</button>
+                <button onClick={() => setResetError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
               </div>
             )}
 
@@ -432,7 +432,7 @@ function ManageUsersContent() {
                     <button
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
                       disabled={page === 0}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{ borderColor: 'var(--nwd-border)', color: 'var(--nwd-purple)' }}
                     >
                       ← Prev
@@ -440,7 +440,7 @@ function ManageUsersContent() {
                     <button
                       onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                       disabled={page >= totalPages - 1}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{ borderColor: 'var(--nwd-border)', color: 'var(--nwd-purple)' }}
                     >
                       Next →
@@ -538,7 +538,7 @@ function ManageUsersContent() {
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setMessagingUser(user) }}
                                       disabled={anyBusy}
-                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                       style={{ borderColor: 'var(--nwd-teal)', color: 'var(--nwd-teal)', background: 'color-mix(in srgb, var(--nwd-teal) 8%, white)' }}
                                     >
                                       Message
@@ -548,7 +548,7 @@ function ManageUsersContent() {
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleReset(user) }}
                                       disabled={anyBusy}
-                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                       style={{ borderColor: 'var(--nwd-teal)', color: isResetting ? '#6b7280' : 'var(--nwd-teal)', background: isResetting ? 'color-mix(in srgb, #6b7280 8%, white)' : 'color-mix(in srgb, var(--nwd-teal) 8%, white)' }}
                                     >
                                       {isResetting ? 'Sending…' : 'Resend Invitation'}
@@ -558,7 +558,7 @@ function ManageUsersContent() {
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleReset(user) }}
                                       disabled={anyBusy}
-                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                       style={{ borderColor: 'var(--nwd-purple)', color: isResetting ? '#6b7280' : 'var(--nwd-purple)', background: isResetting ? 'color-mix(in srgb, #6b7280 8%, white)' : 'color-mix(in srgb, var(--nwd-purple) 8%, white)' }}
                                     >
                                       {isResetting ? 'Sending…' : 'Reset Password'}
@@ -568,7 +568,7 @@ function ManageUsersContent() {
                                     <button
                                       onClick={(e) => { e.stopPropagation(); startEdit(user) }}
                                       disabled={anyBusy || editSaving}
-                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                       style={{ borderColor: 'var(--nwd-sky)', color: 'var(--nwd-sky)', background: 'color-mix(in srgb, var(--nwd-sky) 8%, white)' }}
                                     >
                                       Edit
@@ -578,7 +578,7 @@ function ManageUsersContent() {
                                     onClick={(e) => { e.stopPropagation(); handleDelete(user) }}
                                     disabled={anyBusy || isSelf}
                                     title={isSelf ? 'You cannot delete your own account' : undefined}
-                                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-all hover:brightness-90 active:brightness-75 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                                     style={{ borderColor: '#f43f5e', color: isDeleting ? '#6b7280' : '#f43f5e', background: isDeleting ? 'color-mix(in srgb, #6b7280 8%, white)' : 'color-mix(in srgb, #f43f5e 8%, white)' }}
                                   >
                                     {isDeleting ? 'Deleting…' : 'Delete'}
@@ -619,7 +619,7 @@ function ManageUsersContent() {
                                       <button
                                         onClick={(e) => { e.stopPropagation(); handleSaveEdit(user) }}
                                         disabled={editSaving}
-                                        className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-opacity disabled:opacity-60"
+                                        className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                         style={{ background: 'var(--nwd-teal)' }}
                                       >
                                         {editSaving ? 'Saving…' : 'Save'}
@@ -627,7 +627,7 @@ function ManageUsersContent() {
                                       <button
                                         onClick={(e) => { e.stopPropagation(); cancelEdit() }}
                                         disabled={editSaving}
-                                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-gray-50 disabled:opacity-60"
+                                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-colors hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
                                         style={{ borderColor: 'var(--nwd-border)', color: '#6b7280' }}
                                       >
                                         Cancel
