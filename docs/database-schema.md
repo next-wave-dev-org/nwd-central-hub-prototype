@@ -41,6 +41,8 @@ company                text                                 -- #98
 region                 text                                 -- #98
 mini_profile_visibility jsonb       NOT NULL DEFAULT '{"pronouns":true,"company":true,"region":true}'  -- #98
 avatar_url             text                                 -- #98, see "Profile Avatar Migration" below
+recovery_email         text          CHECK (recovery_email IS NULL OR recovery_email ~* '...')  -- #99, see "Profile Security Fields Migration" below
+primary_phone          text          CHECK (primary_phone  IS NULL OR primary_phone  ~ '...')   -- #99
 ```
 
 **Notes:**
@@ -48,6 +50,7 @@ avatar_url             text                                 -- #98, see "Profile
 - `role` is assigned by an admin at creation and is not user-editable **in the UI** (the Profile page shows it read-only). Note the `Users can update own profile` RLS policy has no `WITH CHECK`, so it does not technically prevent a user from writing their own `role` via a raw query — pre-existing, tracked separately.
 - `pronouns` / `company` / `region` are free-text, user-editable on the Profile page, all nullable. `mini_profile_visibility` is a per-user map of which of those three show on the (not-yet-built) mini profile card — stored now, no consumer yet (#98).
 - `avatar_url` is the full public URL of the user's profile photo in the `avatars` Storage bucket (nullable, user-editable on the Profile page). See "Profile Avatar Migration" below.
+- `recovery_email` / `primary_phone` are nullable, user-editable on the Profile page's Security card, each guarded by a loose NULL-tolerant `CHECK` (format floor only — not strict validation). "Recovery email differs from login email" is enforced client-side, not by a CHECK (it's cross-column against the mutable `email`). See "Profile Security Fields Migration" below. The Security card is also where 2FA (#100) will land.
 - `is_temporary_password` is set to `true` on creation and to `false` after the user completes the forced password change flow. `RouteGuard` reads this field on every protected page load.
 - `name` is set at creation but is not currently reflected in the `UserProfile` TypeScript type. Add `name?: string` to `types/auth.ts` before implementing workspace or messaging features that display user names.
 - NULL rows in this table indicate orphaned auth records — users created outside the `createUser` action. These are inert but should be cleaned up via a future migration.
@@ -1284,6 +1287,39 @@ CREATE POLICY "Users can delete own avatar"
 - `image/svg+xml` is deliberately excluded — the bucket is public and objects are directly reachable by URL.
 - Client-side type/size checks on the Profile page are UX only; `file_size_limit` and `allowed_mime_types` on the bucket row are the real gate.
 - **Deleting a `profiles` row does not cascade to its Storage objects.** Orphaned avatar files must be cleaned up separately (same class of gap as the orphaned-auth-rows note on `profiles`).
+
+---
+
+## Profile Security Fields Migration (#99, apply by hand)
+
+Adds a recovery email and primary phone to `profiles`, surfaced on the Profile page's new **Security** card (the same card 2FA lands on in #100). Both nullable, user-editable via the browser (anon) client — **no grant/RLS change**, same reasoning as the two #98 migrations above.
+
+```sql
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS recovery_email text,
+  ADD COLUMN IF NOT EXISTS primary_phone  text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_recovery_email_format') THEN
+    ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_recovery_email_format
+      CHECK (recovery_email IS NULL OR recovery_email ~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_primary_phone_format') THEN
+    ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_primary_phone_format
+      CHECK (primary_phone IS NULL OR primary_phone ~ '^[0-9+()\-.\s]{7,20}$');
+  END IF;
+END $$;
+```
+
+**Notes:**
+- The two `CHECK`s are **loose format floors**, NULL-tolerant, so a raw PostgREST write can't store obvious garbage in a field an account-recovery flow might later trust. They are not strict validation — `a@b.co` passes, real phone-number rules are not attempted. The Profile page adds friendlier client-side messages and stores the phone exactly as typed (no E.164 normalization).
+- **"Recovery email must differ from login email"** is enforced only client-side — it's a cross-column rule against `email`, which is itself mutable, so it can't be a `CHECK`.
+- All existing `profiles` rows have `NULL` in both columns, so the constraints apply clean (no `NOT VALID` needed). Re-runnable: `ADD COLUMN IF NOT EXISTS` + the `pg_constraint` guard.
+- No grant or RLS change — the table-level `UPDATE` grant to `authenticated` and the `Users can update own profile` policy already cover the new columns.
 
 ---
 

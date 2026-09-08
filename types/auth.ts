@@ -19,4 +19,6 @@ export type UserProfile = {
   region?: string | null
   mini_profile_visibility?: MiniProfileVisibility
   avatar_url?: string | null
+  recovery_email?: string | null
+  primary_phone?: string | null
 }
