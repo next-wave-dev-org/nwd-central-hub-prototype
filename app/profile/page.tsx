@@ -53,6 +53,12 @@ function initialsFrom(name: string | undefined, email: string | undefined): stri
   return letters.toUpperCase()
 }
 
+// Loose, permissive floors that mirror the CHECK constraints in the Profile
+// Security Fields Migration (docs/database-schema.md). Intentionally not strict
+// RFC validation — just enough to catch typos before the write.
+const RECOVERY_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+const PRIMARY_PHONE_RE = /^[0-9+()\-.\s]{7,20}$/
+
 function ProfileContent() {
   const { profile, refreshProfile } = useAuth()
 
@@ -77,6 +83,15 @@ function ProfileContent() {
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [avatarError, setAvatarError] = useState('')
   const avatarUrl = profile?.avatar_url ?? null
+
+  // Security card — its own edit/save state so saving it doesn't clear the
+  // Account Details banners (and vice versa).
+  const [securityEditing, setSecurityEditing] = useState(false)
+  const [recoveryEmail, setRecoveryEmail] = useState('')
+  const [primaryPhone, setPrimaryPhone] = useState('')
+  const [securitySaving, setSecuritySaving] = useState(false)
+  const [securityError, setSecurityError] = useState('')
+  const [securitySuccess, setSecuritySuccess] = useState('')
 
   const handleEdit = () => {
     setName(profile?.name ?? '')
@@ -243,6 +258,71 @@ function ProfileContent() {
 
     await refreshProfile()
     setAvatarBusy(false)
+  }
+
+  const handleSecurityEdit = () => {
+    setRecoveryEmail(profile?.recovery_email ?? '')
+    setPrimaryPhone(profile?.primary_phone ?? '')
+    setSecurityError('')
+    setSecuritySuccess('')
+    setSecurityEditing(true)
+  }
+
+  const handleSecurityCancel = () => {
+    setSecurityError('')
+    setSecurityEditing(false)
+  }
+
+  const handleSecuritySave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!profile) return
+
+    const trimmedEmail = recoveryEmail.trim()
+    const trimmedPhone = primaryPhone.trim()
+
+    if (trimmedEmail && !RECOVERY_EMAIL_RE.test(trimmedEmail)) {
+      setSecurityError('Enter a valid recovery email address.')
+      return
+    }
+    if (trimmedEmail && trimmedEmail.toLowerCase() === (profile.email ?? '').toLowerCase()) {
+      setSecurityError('Recovery email must be different from your login email.')
+      return
+    }
+    if (trimmedPhone && !PRIMARY_PHONE_RE.test(trimmedPhone)) {
+      setSecurityError('Enter a valid phone number (7–20 digits, spaces, and + ( ) - . only).')
+      return
+    }
+
+    const nextEmail = trimmedEmail || null
+    const nextPhone = trimmedPhone || null
+    const updates: Record<string, string | null> = {}
+    if (nextEmail !== (profile.recovery_email ?? null)) updates.recovery_email = nextEmail
+    if (nextPhone !== (profile.primary_phone ?? null)) updates.primary_phone = nextPhone
+
+    if (Object.keys(updates).length === 0) {
+      setSecurityEditing(false)
+      return
+    }
+
+    setSecuritySaving(true)
+    setSecurityError('')
+    setSecuritySuccess('')
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', profile.id)
+
+    if (updateError) {
+      setSecurityError(updateError.message)
+      setSecuritySaving(false)
+      return
+    }
+
+    await refreshProfile()
+    setSecuritySaving(false)
+    setSecurityEditing(false)
+    setSecuritySuccess('Security details updated.')
   }
 
   const roleLabel = profile ? ROLE_LABELS[profile.role] ?? profile.role : ''
@@ -445,6 +525,97 @@ function ProfileContent() {
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Region</dt>
                     <dd className="text-sm text-gray-900 mt-0.5">{profile?.region || 'Not set'}</dd>
+                  </div>
+                </dl>
+              )}
+            </div>
+
+            <div className="bg-white p-8 rounded-lg shadow-md">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Security</h2>
+                {!securityEditing && (
+                  <button
+                    onClick={handleSecurityEdit}
+                    className="text-sm font-medium transition-colors cursor-pointer"
+                    style={{ color: 'var(--nwd-teal)' }}
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+
+              <p className="text-sm text-gray-400 mb-4">
+                A recovery email and phone number help us verify it&apos;s you if you lose access to
+                your account.
+              </p>
+
+              {securitySuccess && (
+                <div className="rounded-md bg-green-50 border border-green-200 p-4 text-sm text-green-800 mb-4">
+                  {securitySuccess}
+                </div>
+              )}
+
+              {securityError && (
+                <div className="rounded-md bg-red-50 border border-red-200 p-4 text-sm text-red-700 mb-4">
+                  {securityError}
+                </div>
+              )}
+
+              {securityEditing ? (
+                <form onSubmit={handleSecuritySave} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Recovery Email</label>
+                    <input
+                      type="email"
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Primary Phone</label>
+                    <input
+                      type="tel"
+                      value={primaryPhone}
+                      onChange={(e) => setPrimaryPhone(e.target.value)}
+                      placeholder="+1 (555) 123-4567"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={securitySaving}
+                      className="flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {securitySaving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSecurityCancel}
+                      disabled={securitySaving}
+                      className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <dl className="space-y-4">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Recovery Email</dt>
+                    <dd className="text-sm text-gray-900 mt-0.5">
+                      {profile?.recovery_email || 'Not set'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Primary Phone</dt>
+                    <dd className="text-sm text-gray-900 mt-0.5">
+                      {profile?.primary_phone || 'Not set'}
+                    </dd>
                   </div>
                 </dl>
               )}
