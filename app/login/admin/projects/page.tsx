@@ -72,6 +72,7 @@ function ActiveStatusBadge() {
 function AdminProjectsContent() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [sortCol, setSortCol] = useState<SortCol | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -83,7 +84,9 @@ function AdminProjectsContent() {
         .select('id, title, description, origin, budget, status, created_at')
         .eq('status', 'active')
 
-      if (!error) {
+      if (error) {
+        setError(error.message)
+      } else {
         setProjects(data || [])
       }
 
@@ -164,6 +167,13 @@ function AdminProjectsContent() {
               )}
             </div>
           </div>
+
+          {error && (
+            <div className="mb-6 rounded-lg p-4 border text-sm flex items-start justify-between gap-2" style={{ background: 'color-mix(in srgb, #f43f5e 8%, white)', borderColor: '#fda4af', color: '#9f1239' }}>
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0 cursor-pointer" aria-label="Dismiss">×</button>
+            </div>
+          )}
 
           {loading && (
             <div className="flex flex-col items-center justify-center py-24 gap-4">

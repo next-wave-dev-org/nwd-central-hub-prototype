@@ -108,51 +108,57 @@ function ContractorContent() {
 
   useEffect(() => {
     if (!profile) return
-    fetchData()
-  }, [profile])
+    const contractorId = profile.id
+    let cancelled = false
 
-  async function fetchData() {
-    setLoading(true)
-    setError(null)
+    const fetchData = async () => {
+      const [
+        { data: cpRows, error: cpError },
+        { data: allProjects, error: projectsError },
+        { data: requests, error: requestsError },
+      ] = await Promise.all([
+        supabase
+          .from('contractor_projects')
+          .select('project_id')
+          .eq('contractor_id', contractorId),
+        supabase
+          .from('projects')
+          .select('id, title, description, budget, created_at'),
+        supabase
+          .from('proposal_requests')
+          .select('project_id, status')
+          .eq('contractor_id', contractorId),
+      ])
 
-    const [
-      { data: cpRows, error: cpError },
-      { data: allProjects, error: projectsError },
-      { data: requests, error: requestsError },
-    ] = await Promise.all([
-      supabase
-        .from('contractor_projects')
-        .select('project_id')
-        .eq('contractor_id', profile!.id),
-      supabase
-        .from('projects')
-        .select('id, title, description, budget, created_at'),
-      supabase
-        .from('proposal_requests')
-        .select('project_id, status')
-        .eq('contractor_id', profile!.id),
-    ])
+      if (cancelled) return
 
-    const queryError = cpError || projectsError || requestsError
-    if (queryError) {
-      setError(queryError.message)
+      const queryError = cpError || projectsError || requestsError
+      if (queryError) {
+        setError(queryError.message)
+        setLoading(false)
+        return
+      }
+
+      const joinedIds = new Set((cpRows || []).map((r: { project_id: string }) => r.project_id))
+      const all = (allProjects || []) as Project[]
+
+      const map: RequestMap = {}
+      for (const req of requests || []) {
+        map[req.project_id] = req.status
+      }
+
+      setError(null)
+      setActiveProjects(all.filter((p) => joinedIds.has(p.id)))
+      setAvailableProjects(all.filter((p) => !joinedIds.has(p.id)))
+      setRequestMap(map)
       setLoading(false)
-      return
     }
 
-    const joinedIds = new Set((cpRows || []).map((r: any) => r.project_id))
-    const all = (allProjects || []) as Project[]
-
-    const map: RequestMap = {}
-    for (const req of requests || []) {
-      map[req.project_id] = req.status
+    fetchData()
+    return () => {
+      cancelled = true
     }
-
-    setActiveProjects(all.filter((p) => joinedIds.has(p.id)))
-    setAvailableProjects(all.filter((p) => !joinedIds.has(p.id)))
-    setRequestMap(map)
-    setLoading(false)
-  }
+  }, [profile])
 
   async function requestAccess(projectId: string) {
     setRequesting(projectId)
