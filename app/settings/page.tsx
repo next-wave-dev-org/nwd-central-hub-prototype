@@ -8,6 +8,7 @@ import Navbar from '@/components/Navbar'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { GithubIcon } from '@/components/SocialIcons'
+import ToggleSwitch from '@/components/ToggleSwitch'
 
 function GoogleColorIcon() {
   return <Image src="/google_color.png" alt="Google" width={18} height={18} />
@@ -44,41 +45,6 @@ const LINKED_ACCOUNTS: { name: string; provider: OAuthProvider; Icon: () => Reac
   { name: 'LinkedIn', provider: 'linkedin_oidc', Icon: LinkedInColorIcon },
   { name: 'GitHub', provider: 'github', Icon: GithubCenteredIcon },
 ]
-
-function ToggleSwitch({
-  checked,
-  onChange,
-  label,
-  description,
-}: {
-  checked: boolean
-  onChange: (value: boolean) => void
-  label: string
-  description: string
-}) {
-  return (
-    <div className="flex items-center justify-between py-3">
-      <div className="min-w-0 pr-4">
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        <p className="text-sm text-gray-400">{description}</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 cursor-pointer"
-        style={{ background: checked ? 'var(--nwd-teal)' : '#d1d5db' }}
-      >
-        <span
-          className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-          style={{ transform: checked ? 'translateX(22px)' : 'translateX(4px)' }}
-        />
-      </button>
-    </div>
-  )
-}
 
 function SettingsContent() {
   const { profile } = useAuth()
