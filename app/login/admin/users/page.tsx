@@ -121,6 +121,8 @@ function ManageUsersContent() {
     return () => clearTimeout(timer)
   }, [searchRaw])
 
+  // Re-fetch after create/delete/reset/edit. Called only from event handlers,
+  // never an effect, so the synchronous loading/error resets here are fine.
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true)
     setUsersError(null)
@@ -133,13 +135,28 @@ function ManageUsersContent() {
     setLoadingUsers(false)
   }, [])
 
-  useEffect(() => { loadUsers() }, [loadUsers])
-  useEffect(() => { setPage(0) }, [search, sortCol, sortDir])
-  useEffect(() => { setPage(0) }, [pageSize])
+  // Initial load — inline in the effect (matching admin/projects) so the
+  // set-state-in-effect rule can see the await before any setState.
+  useEffect(() => {
+    let cancelled = false
+    const loadInitial = async () => {
+      const result = await getUsers()
+      if (cancelled) return
+      if (result.success) {
+        setUsers(result.users)
+        setUsersError(null)
+      } else {
+        setUsersError(result.error)
+      }
+      setLoadingUsers(false)
+    }
+    loadInitial()
+    return () => { cancelled = true }
+  }, [])
 
   const filteredSortedUsers = useMemo(() => {
     const q = search.trim().toLowerCase()
-    let result = q
+    const result = q
       ? users.filter(
           (u) =>
             (u.name ?? '').toLowerCase().includes(q) ||
@@ -168,6 +185,7 @@ function ManageUsersContent() {
     : filteredSortedUsers.slice(page * pageSize, (page + 1) * pageSize)
 
   function toggleSort(col: SortCol) {
+    setPage(0)
     if (sortCol === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -401,7 +419,7 @@ function ManageUsersContent() {
                 type="search"
                 placeholder="Search by name, email, or role…"
                 value={searchRaw}
-                onChange={(e) => setSearchRaw(e.target.value)}
+                onChange={(e) => { setSearchRaw(e.target.value); setPage(0) }}
                 className="w-full rounded-lg border pl-9 pr-3 py-2 text-sm outline-none focus:ring-2"
                 style={{ borderColor: 'var(--nwd-border)' }}
               />
@@ -418,7 +436,7 @@ function ManageUsersContent() {
                   </p>
                   <select
                     value={pageSize}
-                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0) }}
                     className="rounded-md border px-2 py-1 text-xs outline-none focus:ring-2 bg-white"
                     style={{ borderColor: 'var(--nwd-border)', fontFamily: 'var(--font-geist-mono)' }}
                   >
