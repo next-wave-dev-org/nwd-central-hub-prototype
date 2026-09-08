@@ -40,12 +40,14 @@ pronouns               text                                 -- #98, see "Profile
 company                text                                 -- #98
 region                 text                                 -- #98
 mini_profile_visibility jsonb       NOT NULL DEFAULT '{"pronouns":true,"company":true,"region":true}'  -- #98
+avatar_url             text                                 -- #98, see "Profile Avatar Migration" below
 ```
 
 **Notes:**
 - `id` is the Supabase auth UID — not generated independently. The `profiles` row is deleted automatically if the corresponding `auth.users` row is deleted.
 - `role` is assigned by an admin at creation and is not user-editable **in the UI** (the Profile page shows it read-only). Note the `Users can update own profile` RLS policy has no `WITH CHECK`, so it does not technically prevent a user from writing their own `role` via a raw query — pre-existing, tracked separately.
 - `pronouns` / `company` / `region` are free-text, user-editable on the Profile page, all nullable. `mini_profile_visibility` is a per-user map of which of those three show on the (not-yet-built) mini profile card — stored now, no consumer yet (#98).
+- `avatar_url` is the full public URL of the user's profile photo in the `avatars` Storage bucket (nullable, user-editable on the Profile page). See "Profile Avatar Migration" below.
 - `is_temporary_password` is set to `true` on creation and to `false` after the user completes the forced password change flow. `RouteGuard` reads this field on every protected page load.
 - `name` is set at creation but is not currently reflected in the `UserProfile` TypeScript type. Add `name?: string` to `types/auth.ts` before implementing workspace or messaging features that display user names.
 - NULL rows in this table indicate orphaned auth records — users created outside the `createUser` action. These are inert but should be cleaned up via a future migration.
@@ -1221,7 +1223,67 @@ ALTER TABLE public.profiles
 - All three text columns are nullable; the Profile page trims blank input back to `NULL`.
 - `mini_profile_visibility` is a whole-object write (the page sends the full `{pronouns, company, region}` map on every toggle), so no partial-JSON merge logic is needed. `jsonb` rather than three `boolean` columns because nothing queries or filters on it and #99 is expected to add more fields.
 - Profile-page saves call a new `refreshProfile()` on `AuthProvider`'s context afterward — a plain `profiles` UPDATE fires no auth event, so the cached `useAuth().profile` would otherwise stay stale until the next mount or tab refocus. (Same class of staleness as the change-password reroute bug in `bug-list.md`; not fixed there by this change.)
-- Avatar upload (the remaining task on #98) is a separate follow-up — it needs a Storage bucket and `storage.objects` policies and is not part of this migration.
+- Avatar upload (the remaining task on #98) is a separate follow-up — it needs a Storage bucket and `storage.objects` policies and is not part of this migration. See "Profile Avatar Migration" below.
+
+---
+
+## Profile Avatar Migration (#98, apply by hand)
+
+Adds a profile photo to `profiles`. This is the project's **first Supabase Storage bucket** — everything before this stored only rows.
+
+```sql
+-- 1. Column: full public URL of the current avatar (nullable).
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS avatar_url text;
+
+-- 2. Storage bucket: public read, 2 MiB cap, raster image types only.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('avatars', 'avatars', true, 2097152,
+        ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+ON CONFLICT (id) DO NOTHING;
+
+-- 3. storage.objects policies — each user may only write inside their own
+--    {uid}/ folder; reads are public. RLS is already enabled on
+--    storage.objects by default — do NOT run ALTER TABLE ... ENABLE RLS.
+DROP POLICY IF EXISTS "Avatar images are publicly readable" ON storage.objects;
+CREATE POLICY "Avatar images are publicly readable"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'avatars');
+
+DROP POLICY IF EXISTS "Users can upload own avatar" ON storage.objects;
+CREATE POLICY "Users can upload own avatar"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "Users can update own avatar" ON storage.objects;
+CREATE POLICY "Users can update own avatar"
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "Users can delete own avatar" ON storage.objects;
+CREATE POLICY "Users can delete own avatar"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+```
+
+**Notes:**
+- **No `profiles` grant or RLS change** — same reasoning as the Personal Info migration above: the table-level `UPDATE` grant and the `Users can update own profile` policy already cover `avatar_url`.
+- `CREATE POLICY ... ON storage.objects` requires table-owner privileges. If `npm run db:exec` returns `must be owner of table objects`, create the four policies through the Supabase Dashboard (**Storage → Policies → avatars**) with the same predicates — the SQL above is still the spec.
+- **Object path is `{uid}/{timestamp}.{ext}`.** The policy predicate keys off the first path segment (`storage.foldername(name)[1]`), so the per-user folder is what enforces "own avatar only". The `::text` cast on `auth.uid()` is required (`uuid` vs `text[]`).
+- **`avatar_url` stores the full public URL, not the object path.** One shared Supabase instance, so portability isn't a concern, and every future consumer (mini profile card, message surfaces) is then a plain `<img src={profile.avatar_url}>` with no bucket knowledge. The Profile page renders it with a plain `<img>` (not `next/image` — an 80px avatar doesn't need the optimizer, and `next/image` needs an `images.remotePatterns` entry a plain tag doesn't); a consumer that wants `next/image` will need to add the Supabase host to `next.config.ts`.
+- **Cache-busting is the unique filename.** Each upload writes a new `{timestamp}.{ext}` and the Profile page deletes the previous object after the `profiles` row is updated; the public URL therefore changes on every replace and no CDN `?v=` param is needed.
+- `image/svg+xml` is deliberately excluded — the bucket is public and objects are directly reachable by URL.
+- Client-side type/size checks on the Profile page are UX only; `file_size_limit` and `allowed_mime_types` on the bucket row are the real gate.
+- **Deleting a `profiles` row does not cascade to its Storage objects.** Orphaned avatar files must be cleaned up separately (same class of gap as the orphaned-auth-rows note on `profiles`).
 
 ---
 

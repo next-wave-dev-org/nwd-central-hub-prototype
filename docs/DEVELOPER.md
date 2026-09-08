@@ -60,9 +60,12 @@ pronouns                text                                          -- #98
 company                 text                                          -- #98
 region                  text                                          -- #98
 mini_profile_visibility jsonb        NOT NULL DEFAULT '{...}'::jsonb   -- #98, which fields show on the (unbuilt) mini profile card
+avatar_url              text                                          -- #98, full public URL of the profile photo in the `avatars` Storage bucket
 ```
 
 Additive columns (`email_notifications`, and the `#98` block) each have a dedicated "… Migration" section in `docs/database-schema.md`. None need a grant/RLS change — `profiles` has a table-level `UPDATE` grant to `authenticated` and the `Users can update own profile` policy covers all columns of the own row.
+
+`avatar_url` is backed by the `avatars` Supabase **Storage** bucket (public read; per-user write policies on `storage.objects` keyed to a `{uid}/` object-path prefix) — the project's first bucket. Full migration + the owner-privilege caveat for `CREATE POLICY ON storage.objects`: the "Profile Avatar Migration" section in `docs/database-schema.md`.
 
 ### `proposals`
 
